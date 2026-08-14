@@ -24,19 +24,22 @@
        about 1600 but falls apart on a 21:9 monitor: the title sank into the
        bottom-left corner and the catalogue line drifted a metre away from the
        record. So the composition is bounded by a frame instead of the window.
-       The frame is NOT window-centred. The disc is nailed to 37vw by the
-       canvas offset and cannot move, so a centred frame would slide out from
-       under it and change the relationship between the record and the type at
-       every width. Instead the frame is placed so its own 37% point always
-       lands on the disc's centre -- which makes it identical to the old
-       edge-anchored layout at <=1600 and just stops the spread beyond that. */
-    --fw: min(100vw, 1600px);            /* frame width */
-    --fx: calc(37vw - .37 * var(--fw));  /* frame left edge, 0 below 1600 */
-    --gut: 38px;                         /* the frame's own gutter */
+       The frame WAS placed off the disc rather than window-centred, because
+       the disc was pinned to 37vw and a centred frame slid out from under it.
+       The disc is centred in the window now (see H_OFF), so that reason is
+       gone and the frame is plainly centred, which is what was asked for
+       originally. */
+    --fw: min(100vw, 1600px);              /* frame width */
+    --fx: calc((100vw - var(--fw)) / 2);   /* frame left edge, 0 below 1600 */
+    --gut: 38px;                           /* the frame's own gutter */
 
     /* Liner column geometry, hoisted out of #liner so the catalogue line and
-       the hint can align to the same column instead of guessing at it. */
-    --lx: min(calc(37vw + 47vh + 64px), calc(100vw - 330px));
+       the hint can align to the same column instead of guessing at it.
+       Still tracks the disc so it cannot strand itself half a screen away on
+       a wide window, but it now sits as far right as the disc allows rather
+       than hugging it -- and on a narrow window the disc simply passes behind
+       the column, which is what the scrim has always been for. */
+    --lx: min(calc(50vw + 47vh + 56px), calc(100vw - 330px));
     --lw: 268px;
     --lr: calc(100vw - var(--lx) - var(--lw));   /* liner right edge, as an inset */
   }
@@ -483,7 +486,14 @@ vec3 anisoEnv(vec3 R, vec3 T, float rough){
 
 void main(){
   // ---- true perspective: cast a ray per pixel ---------------------------
-  vec2 ndc = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+  // Principal point in x, screen centre in y. uCenter was uploaded but never
+  // read here, so the disc drew at dead canvas centre; reading its x is what
+  // lets the disc move off 37vw without touching #stage.
+  // Its y is deliberately NOT read. V_OFF is an optical lift applied to the
+  // ARM alone -- feeding it to the ray as well raises the disc by the same
+  // 27px, the two cancel, and the stylus ends up hanging off the rim in mid
+  // air. Verified by screenshot, twice. Leave the y term alone.
+  vec2 ndc = (gl_FragCoord.xy - vec2(uCenter.x, 0.5*uRes.y)) / uRes.y;
   vec3 ro  = uCamPos;
   vec3 rd  = normalize(uFwd + uRight*(ndc.x*uTanFov) + uUp*(ndc.y*uTanFov));
 
@@ -1286,6 +1296,15 @@ document.body.classList.add('showliner');
 // of the scene is below the midline. Shared by the shader and the SVG arm --
 // they must agree or the needle stops touching the groove.
 const V_OFF = -0.030;
+// Horizontal twin of V_OFF, and the reason the disc can be centred in the
+// WINDOW without touching #stage. The canvas spans -26%..100% of the viewport,
+// so its own centre lands at 37vw; viewport-centre sits at (0.5+0.26)/1.26 of
+// the canvas instead. Moving the camera's principal point is safe where moving
+// the canvas is not -- the canvas has to keep covering the window or its
+// vignette shows up as a seam.
+// UNLIKE V_OFF, this one takes the SAME sign in both places: screen x and
+// gl_FragCoord.x both count right.
+const H_OFF = 0.76/1.26 - 0.5;      // = +0.1032, constant at any window width
 const DIST_BASE = 4.69;   // scaled with the 126%-wide canvas so the disc keeps its framing
 const cam = { yaw: 0.34, pitch: 0.62, dist: DIST_BASE, fov: 30*Math.PI/180 };
 
@@ -1313,13 +1332,16 @@ function project(P, B, W, H){
   const x=d[0]*B.rt[0]+d[1]*B.rt[1]+d[2]*B.rt[2];
   const y=d[0]*B.up[0]+d[1]*B.up[1]+d[2]*B.up[2];
   const t=Math.tan(cam.fov);
-  return [ W*0.5 + (x/(z*t))*H, H*(0.5+V_OFF) - (y/(z*t))*H ];
+  return [ W*(0.5+H_OFF) + (x/(z*t))*H, H*(0.5+V_OFF) - (y/(z*t))*H ];
 }
 
 // screen px -> world ray, then intersect a horizontal plane
 function rayFor(sx, sy, B, W, H){
   const t=Math.tan(cam.fov);
-  const nx=(sx - W*0.5)/H, ny=(H*0.5 - sy)/H;
+  // Must invert project() exactly, including both offsets. The vertical one was
+  // missing here -- rayFor used a plain H*0.5 while project() used H*(0.5+V_OFF)
+  // -- so every drag was resolved about 27px above where the arm was drawn.
+  const nx=(sx - W*(0.5+H_OFF))/H, ny=(H*(0.5+V_OFF) - sy)/H;
   const d=[
     B.fwd[0] + B.rt[0]*nx*t + B.up[0]*ny*t,
     B.fwd[1] + B.rt[1]*nx*t + B.up[1]*ny*t,
@@ -2157,7 +2179,8 @@ function frame(now){
   }
   resize();
   gl.viewport(0,0,cv.width,cv.height);
-  gl.uniform2f(U('uCenter'),cv.width/2,cv.height*(0.5-V_OFF));  // gl_FragCoord.y counts up; project() counts down
+  // y inverts (gl_FragCoord.y counts up, project() counts down); x does not
+  gl.uniform2f(U('uCenter'),cv.width*(0.5+H_OFF),cv.height*(0.5-V_OFF));
   gl.uniform1f(U('uRadius'),Math.min(cv.width,cv.height)*.5*zoom);
   gl.uniform1f(U('uSpin'),spin);
   gl.uniform1f(U('uLightRot'),(+S.lit.value)*Math.PI/180);

@@ -4,7 +4,8 @@
   "description": "A desktop turntable that renders **your** copy of what's playing — worn exactly as much as you've actually played it.",
   "main": "shot.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "serve": "node scripts/serve.js"
   },
   "keywords": [],
   "author": "",

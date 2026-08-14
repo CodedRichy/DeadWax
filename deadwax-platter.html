@@ -118,6 +118,14 @@
     display:block;width:min(calc(var(--fw) * .27),380px);
   }
   #np .m b{color:var(--accent);font-weight:400}
+  /* Live state as a word in a line that already exists. A lit badge would be
+     the only piece of chrome on screen, which is not what this UI is. */
+  #npCov[data-live="1"]::after{content:' · on now';color:var(--accent)}
+  /* Playing something we have no pressing of. Saying so is better than
+     silently leaving the wrong record on the platter. */
+  #stylusInfo[data-np]:not([data-np=""])::after{
+    content:' · not pressed — ' attr(data-np);color:var(--ink-3);
+  }
 
   /* ---- tracklist, set as liner notes down the right margin ---- */
   /* Anchored to the RECORD, not the window edge.
@@ -2214,6 +2222,88 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// ---------------- live: what is actually playing ----------------
+// The shelf is a snapshot baked by scripts/build-data.js. This is the other
+// half: the record on the platter follows what you are listening to right now.
+//
+// Served by scripts/serve.js, which holds the API key -- the page never sees
+// it. Over file:// there is no server, so this whole block no-ops and the
+// baked shelf behaves exactly as it did before.
+//
+// Last.fm has no push side. getRecentTracks marks the head track nowplaying
+// while it is in progress, so polling is the only option; 15s is well inside
+// the rate limit and finer than a track boundary matters.
+const NOW = (() => {
+  if(location.protocol === 'file:') return null;
+
+  const el = id => document.getElementById(id);
+  const norm = s => (s||'').toLowerCase()
+    .replace(/\s*[\(\[](deluxe|remaster(ed)?|anniversary|special|expanded|explicit|bonus[^)\]]*|standard)[^)\]]*[\)\]]/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim();
+
+  let lastKey = null, failed = 0;
+
+  // Album first, because that is what a record IS. Falling back to matching on
+  // artist alone would drop a random record from the right artist on the
+  // platter, which is worse than admitting we do not have the pressing.
+  function findRecord(np){
+    const a = norm(np.artist), al = norm(np.album), t = norm(np.track);
+    if(al) { const hit = SHELF.find(r => norm(r.artist)===a && norm(r.album)===al); if(hit) return hit; }
+    // no album in the scrobble (common for singles) -- find the pressing that
+    // actually contains the track, not just anything by the artist
+    return SHELF.find(r => norm(r.artist)===a && r.tracks.some(x => norm(x.t)===t)) || null;
+  }
+
+  // Put the needle where the track is, rather than restarting the side. The
+  // band radii are already laid out by layout(); this just picks one.
+  function cueTo(rec, trackName){
+    const t = norm(trackName);
+    for(const side of [0,1]){
+      const list = sideTracks(rec, side);
+      if(!list.some(x => norm(x.t)===t)) continue;
+      if(rec !== REC || side !== SIDE) selectRecord(rec, side);
+      const b = bands.find(x => norm(x.t)===t);
+      if(b){ armR = b.r1 - (b.r1-b.r0)*0.04; lifting = false; lift = 0; setPlaying(true); }
+      return true;
+    }
+    return false;
+  }
+
+  function paint(np, err){
+    const cov = el('npCov');
+    if(err){ cov.dataset.live = ''; return; }
+    // The live state is one word in a line that already exists. A badge would
+    // be the only lit chrome on screen, which is not what this UI is.
+    cov.dataset.live = np && np.playing ? '1' : '';
+  }
+
+  async function tick(){
+    try{
+      const r = await fetch('/api/now', { cache:'no-store' });
+      const np = await r.json();
+      failed = 0;
+      if(np.error){ paint(null, np.error); return; }
+      paint(np);
+      if(!np.playing) { lastKey = null; return; }
+      const key = np.artist + ' ' + np.track;
+      if(key === lastKey) return;              // same track, nothing to do
+      lastKey = key;
+      const rec = findRecord(np);
+      if(rec) cueTo(rec, np.track);
+      el('stylusInfo').dataset.np = rec ? '' : `${np.artist} — ${np.track}`;
+    }catch(e){
+      // Server gone (or we are on file://). Stop after a few tries rather than
+      // hammering a socket that is not coming back.
+      if(++failed > 4) clearInterval(NOW.timer);
+      paint(null, e.message);
+    }
+  }
+  const api = { tick, timer: 0 };
+  api.timer = setInterval(tick, 15000);
+  tick();
+  return api;
+})();
 </script>
 </body>
 </html>

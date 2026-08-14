@@ -18,6 +18,27 @@
     --sans: system-ui,'Segoe UI',sans-serif;
     --mono: ui-monospace,'Cascadia Mono',Consolas,monospace;
     --ease: cubic-bezier(.16,1,.3,1);
+
+    /* ---- the frame ----
+       Everything used to hang off the viewport edges, which is fine up to
+       about 1600 but falls apart on a 21:9 monitor: the title sank into the
+       bottom-left corner and the catalogue line drifted a metre away from the
+       record. So the composition is bounded by a frame instead of the window.
+       The frame is NOT window-centred. The disc is nailed to 37vw by the
+       canvas offset and cannot move, so a centred frame would slide out from
+       under it and change the relationship between the record and the type at
+       every width. Instead the frame is placed so its own 37% point always
+       lands on the disc's centre -- which makes it identical to the old
+       edge-anchored layout at <=1600 and just stops the spread beyond that. */
+    --fw: min(100vw, 1600px);            /* frame width */
+    --fx: calc(37vw - .37 * var(--fw));  /* frame left edge, 0 below 1600 */
+    --gut: 38px;                         /* the frame's own gutter */
+
+    /* Liner column geometry, hoisted out of #liner so the catalogue line and
+       the hint can align to the same column instead of guessing at it. */
+    --lx: min(calc(37vw + 47vh + 64px), calc(100vw - 330px));
+    --lw: 268px;
+    --lr: calc(100vw - var(--lx) - var(--lw));   /* liner right edge, as an inset */
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg)}
@@ -56,40 +77,56 @@
   body.arming #arm .hit{cursor:grabbing}
 
   /* ---- masthead + catalogue line ---- */
-  #head{position:fixed;top:30px;left:38px;pointer-events:none;z-index:5}
+  #head{position:fixed;top:30px;left:calc(var(--fx) + var(--gut));pointer-events:none;z-index:5}
   #head h1{
     font-family:var(--display);font-weight:400;font-size:23px;margin:0;
     letter-spacing:.06em;color:var(--ink);
   }
   #cat{
-    position:fixed;top:34px;right:38px;z-index:5;pointer-events:none;
+    /* Sits over the tracklist column, the way a catalogue number sits over the
+       track listing on a sleeve back -- not out at the window edge. */
+    position:fixed;top:34px;right:var(--lr);z-index:5;pointer-events:none;
     font-family:var(--mono);font-size:10px;color:var(--ink-3);
     letter-spacing:.22em;text-transform:uppercase;text-align:right;
   }
   #cat b{color:var(--accent);font-weight:400}
 
   /* ---- the record's own title block, set like a sleeve back ---- */
-  #np{position:fixed;bottom:78px;left:38px;z-index:5;pointer-events:none;max-width:min(44vw,600px)}
+  #np{position:fixed;bottom:80px;left:calc(var(--fx) + var(--gut));z-index:5;
+    pointer-events:none;max-width:min(calc(var(--fw) * .44),600px)}
   #np .t{
     font-family:var(--display);font-weight:400;
-    font-size:clamp(38px,5.2vw,76px);line-height:.94;letter-spacing:-.018em;
+    /* off the frame, not the window -- 5.2vw kept growing past the point where
+       the title still belonged to the record */
+    font-size:clamp(38px,calc(var(--fw) * .052),76px);
+    line-height:.92;letter-spacing:-.018em;
     margin:0;text-wrap:balance;
   }
   #np .a{
-    font-size:14px;color:var(--ink-2);margin-top:14px;letter-spacing:.09em;
+    font-size:13px;color:var(--ink-2);margin-top:15px;letter-spacing:.14em;
     text-transform:uppercase;
   }
+  /* The rule runs a fixed measure instead of hugging the text: two mono lines
+     of different lengths under it were making the whole block look ragged. */
   #np .m{
-    font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.18em;
-    text-transform:uppercase;margin-top:18px;
-    padding-top:12px;border-top:1px solid var(--rule);display:inline-block;
+    font-family:var(--mono);font-size:10px;color:var(--ink-2);letter-spacing:.18em;
+    text-transform:uppercase;margin-top:22px;
+    padding-top:13px;border-top:1px solid var(--rule);
+    display:block;width:min(calc(var(--fw) * .27),380px);
   }
   #np .m b{color:var(--accent);font-weight:400}
 
   /* ---- tracklist, set as liner notes down the right margin ---- */
+  /* Anchored to the RECORD, not the window edge.
+     The disc is sized off viewport height (centre sits at 37vw, radius ~47vh),
+     so on a wide window it stays put while a right-pinned column walks away
+     from it — at 1920 that opened ~500px of dead space between the two. This
+     tracks the disc's right edge and only falls back to the window edge when
+     the column would otherwise run off it. */
   #liner{
-    position:fixed;top:50%;right:56px;transform:translateY(-50%);z-index:5;
-    width:268px;pointer-events:none;
+    position:fixed;top:50%;transform:translateY(-50%);z-index:5;
+    left:var(--lx);
+    width:var(--lw);pointer-events:none;
     opacity:0;transition:opacity .5s var(--ease);
     /* the record passes behind this, so the column needs its own ground */
     padding:20px 0 20px 26px;
@@ -99,24 +136,35 @@
      words along with the ground. */
   #liner::before{
     content:'';position:absolute;inset:-30px -40px -30px -80px;z-index:-1;
-    background:linear-gradient(to left,rgba(8,8,10,.86) 50%,rgba(8,8,10,0));
+    /* Pure black, not the background colour. Painting rgba(8,8,10,.86) over the
+       canvas -- which is darker than --bg where it vignettes -- LIGHTENED it,
+       so the scrim showed up as a grey rectangle floating beside the record. A
+       black gradient can only ever darken whatever it lands on. */
+    background:linear-gradient(to left,rgba(0,0,0,.80) 50%,rgba(0,0,0,0));
     -webkit-mask-image:linear-gradient(to bottom,transparent,#000 12%,#000 88%,transparent);
             mask-image:linear-gradient(to bottom,transparent,#000 12%,#000 88%,transparent);
   }
   body.showliner #liner{opacity:1}
   #liner .side{
     font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;
-    color:var(--ink-3);padding-bottom:9px;margin-bottom:4px;border-bottom:1px solid var(--rule);
+    color:var(--ink-3);padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid var(--rule);
   }
   #liner ol{list-style:none;margin:0;padding:0}
   #liner li{
-    display:grid;grid-template-columns:22px 1fr auto;gap:11px;align-items:baseline;
-    padding:6px 0;font-size:12.5px;color:var(--ink-3);
+    display:grid;grid-template-columns:20px 1fr auto;gap:12px;align-items:baseline;
+    padding:7px 0;font-size:13px;line-height:1.25;color:var(--ink-3);
     /* wear is carried by the rule under each track, not a progress bar */
     border-bottom:1px solid rgba(255,255,255,calc(var(--w) * .16));
   }
-  #liner li .n{font-family:var(--mono);font-size:10px;color:var(--ink-3)}
-  #liner li .p{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.04em}
+  /* tabular figures so the play counts form a right-hand column instead of a
+     ragged edge that shifts every time the record changes */
+  #liner li .n,#liner li .p{
+    font-family:var(--mono);font-size:10px;color:var(--ink-3);
+    font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;
+  }
+  /* a half-step under the track title -- the number is an index, not content */
+  #liner li .n{color:oklch(41% .008 80)}
+  #liner li .p{letter-spacing:.04em}
   #liner li[data-heard="1"]{color:var(--ink-2)}
   #liner li.now{color:var(--ink)}
   #liner li.now .n,#liner li.now .p{color:var(--accent)}
@@ -154,7 +202,9 @@
   #shelf{
     position:fixed;inset:0;z-index:9;background:rgba(6,6,8,.93);
     backdrop-filter:blur(22px);
-    padding:74px 8vw;overflow-y:auto;
+    /* the shelf is window-centred -- it is a full-screen overlay and owes the
+       record nothing, unlike the frame the rest of the type hangs off */
+    padding:74px max(8vw, calc((100vw - var(--fw))/2 + var(--gut)));overflow-y:auto;
     opacity:0;visibility:hidden;transition:opacity .4s var(--ease),visibility .4s;
   }
   body.shelfopen #shelf{opacity:1;visibility:visible}
@@ -202,7 +252,8 @@
   /* Bare type, like every other verb in this UI. A bordered pill was the only
      boxed control on screen and read as a different product. */
   #shelfClose{
-    position:fixed;top:34px;right:38px;width:auto;z-index:10;
+    position:fixed;top:34px;right:max(38px, calc((100vw - var(--fw))/2 + var(--gut)));
+    width:auto;z-index:10;
     border:0;background:none;padding:6px 0;color:var(--ink-3);
   }
   #shelfClose:hover,#shelfClose:focus-visible{border:0;color:var(--accent)}
@@ -244,11 +295,14 @@
     padding:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
     text-transform:uppercase;cursor:pointer;margin-bottom:7px}
   button:hover{border-color:var(--accent);color:var(--accent)}
-  #hint{position:fixed;bottom:30px;right:320px;font-family:var(--mono);font-size:9.5px;
+  /* Tracks the liner column like #cat, but never slides under the controls
+     panel -- 320px is the panel plus its peeking strip. */
+  #hint{position:fixed;bottom:30px;right:max(320px, var(--lr));
+    font-family:var(--mono);font-size:9.5px;
     color:#4a4640;letter-spacing:.16em;text-transform:uppercase;z-index:5;pointer-events:none}
 
   /* ---- transport, set flush under the title block ---- */
-  #cue{position:fixed;left:38px;bottom:14px;z-index:7;display:flex;gap:0;align-items:stretch}
+  #cue{position:fixed;left:calc(var(--fx) + var(--gut));bottom:14px;z-index:7;display:flex;gap:0;align-items:stretch}
   #cue button{
     width:auto;padding:0;margin:0;border:0;background:none;
     font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
@@ -260,7 +314,7 @@
   /* the needle's own readout, set as the last line of the title block */
   #stylusInfo{
     font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
-    color:var(--ink-3);white-space:nowrap;margin-top:9px;
+    color:var(--ink-3);white-space:nowrap;margin-top:11px;
   }
   #stylusInfo b{color:var(--accent);font-weight:400}
 
@@ -711,7 +765,10 @@ void main(){
     vec2 luv = vec2(.5+cos(la)*lr*.5, .5-sin(la)*lr*.5);   // -sin: canvas Y is down
     vec3 art = texture(uLabel, luv).rgb;
     vec3 amb = env(vec3(0.,0.,1.))*2.4 + env(normalize(vec3(.6,.3,.7)))*.9;
-    col = art*(amb*.75 + .42);
+    // Card, not backlit film. Both terms were high enough that the tonemapper
+    // ran the label's upper mids into paper-white and took the print with
+    // them; pulling them down is what puts ink back on the stock.
+    col = art*(amb*.60 + .34);
     col += pow(max(dot(N,normalize(R)),0.),8.)*.020;
     float sp = smoothstep(.17,.04,lr);                    // spindle scuffing
     col += sp*uTotalWear*(.030+noise(rot*950.)*.075);
@@ -890,60 +947,123 @@ function layout(rec, side){
 layout(REC, 0);
 
 // ---------------- label texture ----------------
+// The label is the only printed thing in the scene, and it was reading as a
+// smear: 1024px of texture, seen at a ~20 degree rake, is a couple of hundred
+// screen pixels tall, so the isotropic mip chain threw away the horizontal
+// detail as well as the vertical. Print at 2048 and let the sampler run
+// anisotropic (see the tex setup) and the type comes back.
+const LABEL_PX = 2048;
+const LP = 1024;   // design unit -- all the furniture below is still drawn in
+                  // 1024-space, the canvas is just scaled up under it
+
+// Paper tooth as a tile rather than per-pixel noise. Noise authored at texel
+// scale is exactly what mipmapping averages away first, so the old grain
+// vanished the moment the label got small; a coarse tile survives two or three
+// levels down and still reads as stock.
+let _tooth;
+function paperTooth(){
+  if(_tooth) return _tooth;
+  const T=256, t=document.createElement('canvas'); t.width=t.height=T;
+  const g=t.getContext('2d'), im=g.createImageData(T,T), d=im.data;
+  for(let i=0;i<d.length;i+=4){
+    const v=190+(Math.random()-.5)*130;
+    d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+  }
+  g.putImageData(im,0,0);
+  return (_tooth=t);
+}
+
 function makeLabel(rec, art){
   rec = rec || REC;
-  const S=1024, c=document.createElement('canvas'); c.width=c.height=S;
+  const S=LABEL_PX, c=document.createElement('canvas'); c.width=c.height=S;
   const x=c.getContext('2d');
+  x.scale(S/LP, S/LP);
   if(art){
     // Real sleeve art, darkened so the printed text still reads over it.
     // A fixed 0.42 scrim is tuned for a mid-key cover; on a high-key sleeve
     // (Rebel is near-white) the label blew out and read as a hole punched in
     // the record. Scale the scrim to the artwork's own luminance.
-    x.drawImage(art, 0, 0, S, S);
-    const probe = x.getImageData(0,0,S,S).data;
+    // Print, not projection. A photo dropped in flat and then knocked back by
+    // a scrim converges on mid-grey, which is what made the label read as a
+    // lit hole rather than a piece of card. Push contrast and ink saturation
+    // BEFORE the scrim so the darkening has structure to bite on -- and so the
+    // luminance probe below sees the printed values, not the source photo's.
+    x.filter = 'contrast(1.22) saturate(1.14) brightness(.88)';
+    x.drawImage(art, 0, 0, LP, LP);
+    x.filter = 'none';
+    const probe = x.getImageData(0,0,S,S).data;   // device px, transform-free
     let lum = 0;
     for(let i=0;i<probe.length;i+=4*97)                 // sparse stride, plenty
       lum += (0.2126*probe[i] + 0.7152*probe[i+1] + 0.0722*probe[i+2])/255;
     lum /= Math.ceil(probe.length/(4*97));
+    // Paper white is a ceiling. The scrim is uniform, so a high-contrast cover
+    // (a white subject on a dark ground) kept its blown-out region no matter
+    // how hard the scrim was pushed -- one corner of the label stayed a hole.
+    // 'darken' against a flat stock colour clamps only what is above it.
+    x.save(); x.globalCompositeOperation='darken';
+    x.fillStyle='#c2b7a8'; x.fillRect(0,0,LP,LP); x.restore();
     const scrim = Math.max(.38, Math.min(.76, .30 + lum*0.62));
-    x.fillStyle=`rgba(12,4,7,${scrim.toFixed(3)})`; x.fillRect(0,0,S,S);
+    x.fillStyle=`rgba(12,4,7,${scrim.toFixed(3)})`; x.fillRect(0,0,LP,LP);
   } else {
-    const g=x.createRadialGradient(S*.42,S*.36,S*.05,S*.5,S*.5,S*.62);
+    const g=x.createRadialGradient(LP*.42,LP*.36,LP*.05,LP*.5,LP*.5,LP*.62);
     g.addColorStop(0,'#8d2733'); g.addColorStop(.55,'#661a24'); g.addColorStop(1,'#3a0d15');
-    x.fillStyle=g; x.fillRect(0,0,S,S);
+    x.fillStyle=g; x.fillRect(0,0,LP,LP);
   }
-  const im=x.getImageData(0,0,S,S), d=im.data;
-  for(let i=0;i<d.length;i+=4){ const n=(Math.random()-.5)*20; d[i]+=n; d[i+1]+=n; d[i+2]+=n; }
-  x.putImageData(im,0,0);
-  x.translate(S/2,S/2);
-  x.strokeStyle='rgba(236,230,220,.34)'; x.lineWidth=3.5;
-  x.beginPath(); x.arc(0,0,S*.452,0,7); x.stroke();
-  x.strokeStyle='rgba(236,230,220,.13)'; x.lineWidth=1.5;
-  x.beginPath(); x.arc(0,0,S*.418,0,7); x.stroke();
+  // Stock, then ink. Overlay keeps the tooth out of the highlights, which is
+  // what stops it reading as video noise laid over a photograph.
+  x.save(); x.globalCompositeOperation='overlay'; x.globalAlpha=.30;
+  x.drawImage(paperTooth(),0,0,LP,LP);
+  x.globalCompositeOperation='soft-light'; x.globalAlpha=.55;
+  x.drawImage(paperTooth(),0,0,LP*.5,LP*.5);      // second, finer pass
+  x.drawImage(paperTooth(),LP*.5,0,LP*.5,LP*.5);
+  x.drawImage(paperTooth(),0,LP*.5,LP*.5,LP*.5);
+  x.drawImage(paperTooth(),LP*.5,LP*.5,LP*.5,LP*.5);
+  x.restore();
+
+  // One ink, trapped. Choosing dark-or-light ink per record sounds right and
+  // is not: the type lands on the sleeve photo, not on the stock, so a cover
+  // that averages pale can still be black exactly where the title sits. A
+  // light ink with a dark trap around it reads on either.
+  const INK  = '250,244,234';
+  const TRAP = 'rgba(8,3,5,.55)';
+
+  x.translate(LP/2,LP/2);
+  // Printed rings. These were at .34/.13 and disappeared into the mip chain --
+  // ink on a real label is opaque, it does not fade because you stepped back.
+  x.strokeStyle=`rgba(${INK},.46)`; x.lineWidth=3.5;
+  x.beginPath(); x.arc(0,0,LP*.452,0,7); x.stroke();
+  x.strokeStyle=`rgba(${INK},.20)`; x.lineWidth=2;
+  x.beginPath(); x.arc(0,0,LP*.418,0,7); x.stroke();
   // asymmetric label furniture — gives the eye something to track as it turns
   x.save();
-  x.beginPath(); x.arc(0,0,S*.452,-0.62,0.62); x.arc(0,0,S*.372,0.62,-0.62,true);
-  x.closePath(); x.fillStyle='rgba(236,230,220,.13)'; x.fill();
+  x.beginPath(); x.arc(0,0,LP*.452,-0.62,0.62); x.arc(0,0,LP*.372,0.62,-0.62,true);
+  x.closePath(); x.fillStyle=`rgba(${INK},.17)`; x.fill();
   x.restore();
   x.save(); x.rotate(2.35);
   x.fillStyle='rgba(20,6,9,.55)'; x.beginPath();
-  x.moveTo(0,-S*.30); x.lineTo(S*.055,-S*.20); x.lineTo(-S*.055,-S*.20); x.closePath(); x.fill();
+  x.moveTo(0,-LP*.30); x.lineTo(LP*.055,-LP*.20); x.lineTo(-LP*.055,-LP*.20); x.closePath(); x.fill();
   x.restore();
   x.textAlign='center';
   // long album names have to shrink or they run off the label
   const title = rec.album.toUpperCase();
-  x.fillStyle='#f2ece2';
   let fsz = 60;
   do { x.font=`600 ${fsz}px Georgia,serif`; fsz -= 3; }
-  while (x.measureText(title).width > S*.66 && fsz > 22);
+  while (x.measureText(title).width > LP*.66 && fsz > 22);
+  x.lineJoin='round'; x.strokeStyle=TRAP;
+  x.lineWidth=6; x.strokeText(title,0,-30);
+  x.fillStyle=`rgba(${INK},1)`;
   x.fillText(title,0,-30);
-  x.fillStyle='rgba(242,236,226,.70)'; x.font='300 33px system-ui,sans-serif';
+  x.font='300 33px system-ui,sans-serif';
+  x.lineWidth=4; x.strokeText(rec.artist,0,24);
+  x.fillStyle=`rgba(${INK},.90)`;
   x.fillText(rec.artist,0,24);
-  x.fillStyle='rgba(242,236,226,.40)'; x.font='400 20px ui-monospace,monospace';
+  x.font='400 20px ui-monospace,monospace'; x.lineWidth=3.5;
+  x.strokeText('SIDE  A',0,92); x.strokeText('33⅓ RPM',0,122);
+  x.fillStyle=`rgba(${INK},.72)`;
   x.fillText('SIDE  A',0,92); x.fillText('33⅓ RPM',0,122);
   x.save(); x.font='400 18px ui-monospace,monospace';
-  x.fillStyle='rgba(242,236,226,.30)';
-  const txt='FBR-2016-A1 · A PORKY PRIME CUT ·', rr=S*.383;
+  x.fillStyle=`rgba(${INK},.44)`;
+  const txt='FBR-2016-A1 · A PORKY PRIME CUT ·', rr=LP*.383;
   x.rotate(-Math.PI/2-.62);
   for(const ch of txt){ const a=x.measureText(ch).width/rr;
     x.save(); x.rotate(a/2); x.translate(0,-rr); x.fillText(ch,0,0); x.restore(); x.rotate(a); }
@@ -971,6 +1091,14 @@ gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
 const tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
 gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,makeLabel());
 gl.generateMipmap(gl.TEXTURE_2D);
+// The disc is always seen raked over, so the label's texel footprint is long
+// and thin. Isotropic mipmapping has to pick the LOD off the LONG axis and
+// blurs the short one to match -- that, not the resolution, is what made the
+// print mushy. Anisotropy is the whole fix; the 2048 source just gives it
+// something to fetch.
+const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+if(aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT,
+  Math.min(16, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
 gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -2007,7 +2135,11 @@ function frame(now){
   gl.uniform1f(U('uDeck'),S.deck.checked?1:0);
   gl.uniform1f(U('uCosTilt'),Math.cos((+S.tilt.value)*Math.PI/180));
   cam.pitch = (90-(+S.tilt.value))*Math.PI/180;
-  cam.dist  = DIST_BASE/zoom;
+  // The disc is scaled from viewport height, so a wide window just adds empty
+  // margin instead of a bigger record. Pull the camera in as the frame widens.
+  const aspect = cv.width / Math.max(1, cv.height);
+  const fit = Math.max(0.86, Math.min(1.06, 2.02/aspect));   // 2.02 = design aspect
+  cam.dist  = DIST_BASE/zoom * fit;
   const B = camBasis();
   gl.uniform2f(U('uRes'), cv.width, cv.height);
   gl.uniform3f(U('uCamPos'), B.pos[0], B.pos[1], B.pos[2]);

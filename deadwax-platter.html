@@ -1369,7 +1369,11 @@ function drawArm3D(stylusR, W, Hpx, lift){
     // Grazing edges catch the room. Without this a shaded solid still reads as
     // plastic — the bright silhouette rim is most of what says "metal".
     const rim = Math.pow(1 - Math.abs(vec.dot(n, B.fwd)), 4) * 0.42;
-    const k   = 0.05 + 0.20*sky + 0.95*dif;
+    // Wider tonal range than before. The old floor (.05 + .20*sky) never let
+    // the shadow side get dark, so every part sat inside a 40-value band and
+    // the whole arm read as one flat grey noodle no matter how well the
+    // normals were computed. Form needs somewhere dark to fall to.
+    const k   = 0.022 + 0.15*sky + 1.18*dif;
     const cl  = x => Math.round(Math.max(0, Math.min(255, x)));
     const s   = spc + rim*(0.25 + 0.75*dif);
     return `rgb(${cl(alb[0]*k + 232*s)},${cl(alb[1]*k + 228*s)},${cl(alb[2]*k + 216*s)})`;
@@ -1563,7 +1567,11 @@ function drawArm3D(stylusR, W, Hpx, lift){
 
   const RT = 0.0168;                              // ~10mm dia against a 300mm disc
   // taper: the tube narrows toward the headshell, as an aluminium arm does
-  const tubeMesh = sweep(spine, (i,n)=>RT*(1 - 0.20*(i/n)), [112,109,103], 52, 16);
+  // Gloss 52 spread the highlight over half the circumference, which is a
+  // painted dowel. A drawn aluminium tube carries a narrow specular streak
+  // running its whole length -- that streak is most of what says "metal", so
+  // it wants a tight exponent and a darker base to sit against.
+  const tubeMesh = sweep(spine, (i,n)=>RT*(1 - 0.20*(i/n)), [96,94,89], 110, 20);
 
   // ---- cast shadow on the record ----------------------------------------
   // The strongest depth cue available and the one that was missing. The old
@@ -1685,9 +1693,29 @@ function drawArm3D(stylusR, W, Hpx, lift){
   const cwSvg = sweep(cwSpine,
     (i,n) => RCW*(i===0 ? 0.82 : i===n ? 0.74 : 1), [64,62,58], 26, 20);
 
+  // The tracking-force ring at the front of the weight. A plain barrel is a
+  // turned blank; the ring is the part that says someone set a number on it,
+  // and it breaks up the silhouette that was reading as a grey blob.
+  const cwRing = sweep([at(-0.118,0,ARM_Z), at(-0.152,0,ARM_Z)],
+                       ()=>RCW*1.06, [92,89,83], 40, 20);
+
   // tail stub between the bearing and the weight
   const stubSpine = [at(-0.010,0,ARM_Z), at(-0.070,0,ARM_Z), at(-0.125,0,ARM_Z)];
   const stubMesh = sweep(stubSpine, ()=>RT*0.72, [104,101,95], 44, 10);
+
+  // Gimbal yoke. The bearing housing alone reads as a lump the tube passes
+  // through; the two cheeks either side are what make it a gimbal -- the
+  // horizontal axis has to be visible or the arm looks glued to its post.
+  const yoke = [-1, 1].map(sgn => sweep(
+    [[piv[0] + v[0]*0.062*sgn, piv[1] + v[1]*0.062*sgn, ARM_Z - 0.030],
+     [piv[0] + v[0]*0.062*sgn, piv[1] + v[1]*0.062*sgn, ARM_Z + 0.052]],
+    ()=>0.017, [72,70,65], 34, 12)).join('');
+
+  // The collar where the tube meets the headshell -- a real arm has a knurled
+  // finger nut there. Without it the shell reads as a separate object hanging
+  // in front of the tube rather than bolted to the end of it.
+  const collarMesh = sweep([H(SHELL_L+0.030,0,ARM_Z), H(SHELL_L-0.012,0,ARM_Z)],
+                           ()=>RT*1.55, [118,115,108], 46, 16);
 
   // Painter's algorithm — without this the dial punches through the pillar
   // whenever the camera swings behind it.
@@ -1739,9 +1767,11 @@ function drawArm3D(stylusR, W, Hpx, lift){
     </g>` : ''}
 
   <g>
+    ${yoke}
     ${gimbal}
     ${stubMesh}
     ${cwSvg}
+    ${cwRing}
 
     <path class="hit" d="${tube}" fill="none" stroke="transparent"
           stroke-width="${0.13*R}" stroke-linecap="round"/>
@@ -1754,6 +1784,7 @@ function drawArm3D(stylusR, W, Hpx, lift){
 
     <!-- headshell + cartridge, built and lit in world space -->
     <g>
+      ${collarMesh}
       ${dLift}
       ${dShellSide}${dShellSideL}
       ${dShellTop}
@@ -1763,8 +1794,11 @@ function drawArm3D(stylusR, W, Hpx, lift){
       ${dCartTop}
       ${pCanT && pTip ? `
         <line x1="${pCanT[0]}" y1="${pCanT[1]}" x2="${pTip[0]}" y2="${pTip[1]}"
-              stroke="#c8c4bc" stroke-width="${0.011*R}" stroke-linecap="round"/>
-        <circle cx="${pTip[0]}" cy="${pTip[1]}" r="${0.009*R}" fill="#f4f1ea"/>` : ''}
+              stroke="#b4b0a8" stroke-width="${0.009*R}" stroke-linecap="round"/>
+        <!-- A diamond is 0.4 mil across. At 0.009R in pure white it was the
+             brightest pixel in the frame -- a lens flare on the end of a
+             cantilever. It reads as contact, so it only has to be visible. -->
+        <circle cx="${pTip[0]}" cy="${pTip[1]}" r="${0.0055*R}" fill="#cfc8bb"/>` : ''}
     </g>
   </g>`;
 }

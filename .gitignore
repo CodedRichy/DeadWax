@@ -1,0 +1,6 @@
+node_modules/
+.env
+.env.local
+
+# Playwright capture output — regenerate with `node shot.js` / `node orbit.js`
+*.png

@@ -1,0 +1,16 @@
+{
+  "name": "deadwax",
+  "version": "1.0.0",
+  "description": "A desktop turntable that renders **your** copy of what's playing — worn exactly as much as you've actually played it.",
+  "main": "shot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

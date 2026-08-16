@@ -1419,7 +1419,16 @@ void main(){
     // makes the product's one idea unreadable at the only moment it has to
     // land. So the gloss-loss curve is pushed well past photographic realism.
     // The DATA is true; the amplitude is a drawing decision.
-    float rough = mix(.038, .225, w) * (1. + .30*(1.-lod));
+    //
+    // Second pass, after looking at the launch asset: the first exaggeration
+    // made the disc a smooth GRADIENT from outer to inner, which a stranger
+    // reads as lighting rather than as wear. Brightness alone cannot separate
+    // two neighbouring bands. So wear now changes the surface's CHARACTER, not
+    // just its level -- an unplayed band stays a mirror with a tight hot core,
+    // a played one goes matte and scatters. Glossy beside matte reads as two
+    // different materials at a glance; dark grey beside slightly-lighter grey
+    // does not.
+    float rough = mix(.032, .300, w) * (1. + .30*(1.-lod));
     vec3 e = anisoEnv(TO_W(R), TO_W(T), rough);
 
     // groove micro-relief — keep it visible, it is the whole texture
@@ -1430,7 +1439,11 @@ void main(){
     float refl = mix(.050, 0.70, fres);   // tame full-grazing wash at low camera angles
 
     col  = vec3(.0030,.0030,.0038);
-    col += e * refl * 2.8 * relief * bandLift * mix(1.0,.88,w);
+    // Worn grooves surrender the mirror. This is most of what separates one
+    // band from the next -- the environment reflection is the glossy half of
+    // the material, so taking it away is what makes a played band read as a
+    // different surface rather than a dimmer one.
+    col += e * refl * 2.8 * relief * bandLift * mix(1.0,.58,w);
 
     // View-INDEPENDENT scatter. Every other wear term here is multiplicative on
     // a specular quantity, so wear only existed where the softbox streak
@@ -1441,16 +1454,25 @@ void main(){
     // Worn vinyl is micro-scratched, and micro-scratches scatter diffusely: a
     // played band goes milky from EVERY angle. That is why you can read wear off
     // a flat photograph of a record, and why this has to be a diffuse term
-    // rather than another highlight. Squared so light play stays clean and the
-    // curve opens up at the top.
-    col += env(TO_W(N)) * pow(w, 1.55) * 0.80 * relief * bandLift;
+    // rather than another highlight.
+    //
+    // The exponent is nearly linear now. At 1.55 the curve spent its whole
+    // range on the top third, so only the most-played band lifted at all and
+    // everything below it collapsed into the same black -- which is exactly the
+    // gradient problem. Near-linear gives each band its own step. Still a
+    // power, not a straight line, so a track played twice stays clean.
+    col += env(TO_W(N)) * pow(w, 1.15) * 1.05 * relief * bandLift;
 
     // the light source itself — sharp anisotropic core, stays punchy when worn
     vec3 L = rotX(normalize(vec3(cos(uLightRot+2.1), sin(uLightRot+2.1), .78)), -uFlipRot);
     vec3 H = normalize(L+V);
     float TdotH = dot(T,H);
     float sinTH = sqrt(max(0.,1.-TdotH*TdotH));
-    float core = pow(sinTH, mix(900.,150.,w)) * mix(1.0,.34,w);   // tight hot core
+    // The core is the sharpest thing on an unplayed groove and it should be the
+    // first casualty of wear -- a worn band spreads it wide and dim, so the two
+    // surfaces differ in the highlight's SHAPE, which the eye reads faster than
+    // it reads brightness.
+    float core = pow(sinTH, mix(900.,80.,w)) * mix(1.0,.16,w);   // tight hot core
     float halo = pow(sinTH, mix(150.,26.,w)) * mix(.42,.20,w);    // soft surround
     col += (core*3.8 + halo*1.15) * relief * bandLift * vec3(1.,.965,.905);
 
@@ -2139,8 +2161,9 @@ function ask({ title, body = '', fields = [], yes = 'Save', danger = false,
 // This is the same thing for the app: once the page is a URL other people
 // open, "which build am I looking at" stops being answerable from the render.
 // Newest first. Bump BUILD in the same commit as the change it names.
-const BUILD = '0.9';
+const BUILD = '1.0';
 const PRESSINGS = [
+  { v:'1.0', d:'2026-08-16', n:'Wear stopped being a <b>gradient</b> and became a <b>material</b>. The last pressing made worn grooves brighter, which from across a room reads as lighting, not as wear &mdash; brightness alone cannot separate one band from the one beside it. Now a played band gives up the mirror: it goes matte, its highlight spreads and dims, and it scatters from every angle, while an unplayed band keeps a tight hot core. Glossy beside matte reads as two different surfaces at a glance; dark grey beside slightly&#8209;lighter grey does not. Same honest counts, same declared exaggeration &mdash; a better drawing of it.' },
   { v:'0.9', d:'2026-08-16', n:'The wear got <b>louder</b>. Read the research and the finding was uncomfortable: real groove wear from ordinary play is close to invisible &mdash; collectors call it &ldquo;tough to spot even if you know what to look for&rdquo;. Rendered honestly, a track played 341 times and one played twice are the same black. So the gloss-loss curve is now pushed past photographic realism on purpose. The counts are true; the amplitude is a drawing decision. Added <b>cue burn</b> at the head of every played band &mdash; the one kind of groove wear that really does show as a visible ring, and the hard edge the eye needs to tell two tracks apart. A <b>demo record</b> now sits on the deck at first load, so the thing the site is about is visible before you hand it anything.' },
   { v:'0.8', d:'2026-08-16', n:'A cleanup pressing. The <b>crate fills the frame</b> now instead of floating in it, and track names are set in the same serif as the album — the last generic type on the page. The needle readout stopped lying: it says <i>stylus up</i> or <i>paused</i> rather than printing a running time at a stopped deck. Space works the transport. The typeface is bundled, so the page asks nothing of anyone else.' },
   { v:'0.7', d:'2026-08-16', n:'Put the three bottom corners on <b>one line</b> &mdash; the title, the transport and the paste bar had been sitting at three different heights. Added <b>About</b>, a note on what this is and what it is meant to become. One transport now instead of two: the arm when there is an arm, Play when there is not. Your volume is remembered.' },

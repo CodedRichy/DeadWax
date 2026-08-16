@@ -71,6 +71,22 @@ The shipped build stores your crate in `localStorage` only. It has no backend, n
 
 ---
 
-## Credits
+## Licence
 
-Record icon adapted from a stock vinyl illustration; masked to a real alpha channel by `scripts/make-favicon.js`. Type is [Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif).
+**All rights reserved.** See [LICENSE](LICENSE).
+
+This is not open source. No permission is granted to copy, modify, distribute, fork, re-host, or use this code or its design — including as training data for machine learning models. Viewing the repository, or viewing source on the live page, grants you no rights to it.
+
+If you want to use any of it, ask: [github.com/CodedRichy](https://github.com/CodedRichy)
+
+> **Note on forking.** GitHub's Terms of Service grant every user the right to view and fork any repository that is set to public, regardless of its licence. A licence file cannot override that. If preventing forks matters more than being seen, keep this repository private and publish only the Pages site — which is how it is currently configured.
+>
+> Be aware that the app is a single client-side HTML file, so anyone who opens the live page can read its full source in their browser. The licence removes any implied permission to *use* that source; it cannot make the source unreadable.
+
+### Third-party material
+
+Not covered by the above, and under their own terms:
+
+- **[Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif)** by Rodrigo Fuenzalida — SIL Open Font License 1.1.
+- **The record icon** (`favicon-*.png`, `apple-touch-icon.png`) is derived from a third-party stock illustration, not original work. `scripts/make-favicon.js` masks it to a real alpha channel — the source JPEG's "transparency" is a checkerboard painted into the pixels. Check the stock licence before relying on it.
+- **Album titles, artist names, and cover art** shown at runtime belong to their rights holders. They are fetched by the viewer's browser and are neither stored in nor distributed with this repository.

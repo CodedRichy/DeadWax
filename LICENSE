@@ -1,0 +1,54 @@
+DeadWax — All Rights Reserved
+Copyright (c) 2026 Rishi (CodedRichy). All rights reserved.
+
+This software and its source code, assets, design, and documentation
+(collectively, "the Work") are proprietary and confidential.
+
+NO LICENSE IS GRANTED.
+
+Absent a separate written agreement signed by the copyright holder, you may
+NOT do any of the following with the Work, in whole or in part:
+
+  - copy, reproduce, or store it
+  - modify, adapt, translate, or create derivative works from it
+  - distribute, publish, sublicense, sell, rent, or lease it
+  - fork, mirror, or re-host it
+  - use it for any commercial or non-commercial purpose
+  - use it, or any part of it, as training data or input for any machine
+    learning model, dataset, or automated code-generation system
+  - reverse engineer or decompile it, except to the extent this restriction
+    is unenforceable under applicable law
+
+Viewing this repository, or viewing the source of a page served from it,
+does not grant you any license or right to use the Work.
+
+The Work is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose, and non-infringement. In no event shall
+the copyright holder be liable for any claim, damages, or other liability
+arising from, out of, or in connection with the Work.
+
+To request permission, contact the copyright holder via
+https://github.com/CodedRichy
+
+
+THIRD-PARTY MATERIAL
+
+The following are NOT covered by the copyright claim above and remain the
+property of their respective owners, under their own terms:
+
+  - Instrument Serif, by Rodrigo Fuenzalida, used under the SIL Open Font
+    License 1.1. https://fonts.google.com/specimen/Instrument+Serif
+
+  - The record illustration that favicon-*.png and apple-touch-icon.png are
+    derived from is a third-party stock image. It was not created by the
+    copyright holder of this Work. Confirm the stock licence permits your
+    intended use before relying on these files; replace them if it does not.
+
+  - Album titles, artist names, and cover artwork that appear at runtime
+    belong to their respective rights holders. They are fetched by the
+    viewer's own browser and are neither stored in nor distributed with
+    this repository.
+
+This file is a statement of the copyright holder's terms. It is not legal
+advice and has not been reviewed by a lawyer.

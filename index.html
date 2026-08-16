@@ -59,6 +59,11 @@
        centred and the type read as floating in from nowhere. The record is the
        only thing that gets to be centred; everything else goes to a corner. */
     --edge: 44px;
+    /* The line every bottom-corner block sits on. The transport buttons set it:
+       they sit at --edge with 16px of bottom padding, so their text lands here.
+       The title block and the paste bar are anchored to the same value, which is
+       why all three read as one row rather than three floating heights. */
+    --baseline: calc(var(--edge) + 16px);
 
     /* Liner column geometry, hoisted out of #liner so the catalogue line and
        the hint can align to the same column instead of guessing at it.
@@ -151,11 +156,43 @@
   .vlog .vn{font-size:13px;line-height:1.5;color:var(--ink-2)}
   .vlog .vn b{color:var(--ink);font-weight:400}
 
+  /* About. Shares the dialog shell with Pressings; only the type changes. */
+  /* Scrolls, but shows no bar -- the fade below is the affordance instead. */
+  .about{max-height:56vh;overflow-y:auto;margin-top:2px;padding-right:6px;
+    scrollbar-width:none;-ms-overflow-style:none}
+  .about::-webkit-scrollbar{width:0;height:0;display:none}
+  /* Without this the copy just stops mid-sentence at the fold and reads as
+     clipped. Faded = there is more; the class comes off at the bottom so the
+     last line is never dimmed. */
+  .about.more{
+    -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 46px),transparent);
+    mask-image:linear-gradient(to bottom,#000 calc(100% - 46px),transparent);
+  }
+  .about .lead{
+    font-family:var(--display);font-weight:400;font-size:clamp(19px,2.1vw,27px);
+    line-height:1.28;color:var(--ink);margin:2px 0 22px;letter-spacing:.004em;
+  }
+  .about h4{
+    font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:400;margin:24px 0 9px;
+    padding-top:13px;border-top:1px solid var(--rule);
+  }
+  .about p{font-size:13px;line-height:1.62;color:var(--ink-2);margin:0 0 11px}
+  .about p:last-child{margin-bottom:0}
+  .about b{color:var(--ink);font-weight:400}
+  .about em{color:var(--ink);font-style:italic}
+  .about .sig{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--ink-3);margin-top:26px;padding-top:14px;border-top:1px solid var(--rule);
+  }
+  .about .sig a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+  .about .sig a:hover{border-bottom-color:var(--accent)}
+
   /* ---- the record's own title block, set like a sleeve back ---- */
   /* Bottom-left corner, clear of the disc. It was riding at bottom:80px inside
      the 1600px frame, which on a wide window put its cap-line into the record's
      lower rim -- the title crowded the object it was naming. */
-  #np{position:fixed;bottom:calc(var(--edge) + 46px);left:var(--edge);z-index:5;
+  #np{position:fixed;bottom:var(--baseline);left:var(--edge);z-index:5;
     pointer-events:none;max-width:min(calc(var(--fw) * .40),560px)}
   #np .t{
     font-family:var(--display);font-weight:400;
@@ -532,7 +569,7 @@
      44px margin, so the page read lopsided. The empty state and #np occupy this
      corner mutually exclusively, so they share its baseline too. */
   #empty{
-    position:fixed;left:var(--edge);bottom:calc(var(--edge) + 46px);
+    position:fixed;left:var(--edge);bottom:var(--baseline);
     z-index:8;max-width:min(460px,46vw);text-align:left;display:none;
   }
   body.noshelf #empty{display:block}
@@ -579,8 +616,13 @@
      Corner-set and opaque. The 200x200 minimum and the no-overlay rule are
      YouTube's, not a design choice -- see the markup. Everything else on this
      page is chrome that can float over the record; this one cannot. */
-  #yt{position:fixed;right:var(--edge);bottom:var(--edge);z-index:9;width:246px}
-  .ytrow{display:flex;gap:0;margin-bottom:8px}
+  /* Column-reverse so the input is pinned to the baseline and everything else
+     grows upward from it. Anchoring the block instead let the status message and
+     the video panel shove the input up by their own height, so the paste bar
+     drifted off the line the moment anything appeared under it. */
+  #yt{position:fixed;right:var(--edge);bottom:var(--baseline);z-index:9;width:246px;
+    display:flex;flex-direction:column-reverse;gap:8px}
+  .ytrow{display:flex;gap:0}
   #ytUrl{
     flex:1;min-width:0;background:rgba(0,0,0,.6);border:1px solid #22222a;
     border-right:none;color:var(--ink-2);padding:7px 9px;
@@ -600,7 +642,7 @@
   body.yton #ytHost{display:block}
   #ytMsg{
     font-family:var(--mono);font-size:9px;color:#4a4640;letter-spacing:.14em;
-    text-transform:uppercase;margin-top:8px;line-height:1.5;
+    text-transform:uppercase;line-height:1.5;
   }
   #ytMsg.bad{color:#8a6a5e}
   #importMsg{
@@ -637,6 +679,9 @@
     font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
     color:var(--ink-3);white-space:nowrap;margin-top:11px;
   }
+  /* Nothing playing: collapse it, or its margin holds an 11px gap under the last
+     visible line and the title block stops meeting the baseline. */
+  #stylusInfo:empty{display:none}
   #stylusInfo b{color:var(--accent);font-weight:400}
 
   @media (prefers-reduced-motion:reduce){
@@ -777,6 +822,9 @@
   <button id="bFlip">Flip</button>
   <button id="bShelf">Shelf</button>
   <button id="bCtl">Controls</button>
+  <!-- Deliberately outside the body.noshelf hide-list: on an empty deck this is
+       the only thing left in the bar, which is exactly who About is for. -->
+  <button id="bAbout">About</button>
 </div>
 
 <!-- #hint removed: it repeated Flip and Shelf, which are buttons two inches
@@ -807,8 +855,10 @@
            placeholder="paste a youtube link">
     <button id="ytGo">Play</button>
   </div>
-  <div id="ytHost"><div id="ytPlayer"></div></div>
+  <!-- Column-reverse: .ytrow renders at the bottom, the message directly above
+       it, the video above that. Source order is bottom-up on purpose. -->
   <div id="ytMsg"></div>
+  <div id="ytHost"><div id="ytPlayer"></div></div>
 </div>
 
 <script type="x-shader/x-vertex" id="vs">#version 300 es
@@ -1926,6 +1976,81 @@ function showPressings(){
          <div class="vn">${p.n}</div>
        </div>`).join('') + '</div>',
   });
+}
+// The creator's note. Static on purpose -- a room where visitors leave notes
+// needs writes that persist across machines, which means a backend, and a
+// localStorage version would let every visitor think they posted somewhere only
+// they can see. Better to say one true thing once than to fake a room.
+const ABOUT = `
+<div class="about">
+  <p class="lead">A record wears where you played it. Every other listening
+  history I have seen is a chart. This one is a consequence.</p>
+
+  <h4>The idea</h4>
+  <p>Drag a diamond through a groove ten thousand times and the groove gives up.
+  The band goes milky while the rest of the disc stays mirror&#8209;black. You can
+  see someone's favourite track from across a room, on an object nobody designed
+  to report anything.</p>
+  <p>Streaming took that away. Your play counts exist &mdash; they are just sitting
+  in a database, described to you as a number in a list at the end of the year.
+  DeadWax takes the same numbers and puts the wear back on the surface, where you
+  read it the way you would read a real record: <em>at a glance, before you can
+  count.</em></p>
+
+  <h4>The thinking</h4>
+  <p>The parts that are easy to fake are the parts that give a render away, so
+  they are not faked. The flip is a rigid&#8209;body turn of the disc, and the face
+  swaps at the <b>measured</b> edge&#8209;on angle &mdash; &minus;33.5&deg; at this
+  camera rake, not the 90&deg; you would assume. The pressing is off&#8209;centre by
+  about 0.7&nbsp;mm, so the disc orbits the spindle once a revolution, like every
+  record ever cut. Sides split at 22 minutes, which is what a 12&#8243; at
+  33&#8531; actually holds, so a short record is honestly one&#8209;sided.</p>
+  <p>The decision the whole thing rests on is smaller than any of those. Worn
+  vinyl is micro&#8209;scratched, and micro&#8209;scratches scatter light
+  <b>diffusely</b> &mdash; so the wear is rendered view&#8209;independent. Make it
+  specular and it only appears where the highlight happens to fall, and the wear
+  stops being the point. That one line is the difference between a record and a
+  screensaver.</p>
+
+  <h4>What this page is not</h4>
+  <p>This is the demo, not the product. What I actually set out to build is a
+  <b>desktop app</b> &mdash; something that sits on your machine, watches what you
+  are really playing, and presses the record as you listen. No export to upload, no
+  link to paste, no browser tab to remember. You would leave it open on a second
+  screen and the wear would arrive on its own, over months, the way it does on a
+  real shelf.</p>
+  <p>The web version exists because the surface had to be proved first. Every hard
+  question here &mdash; whether wear reads as wear, whether the flip feels like an
+  object, whether a stranger understands the disc without a legend &mdash; is the
+  same question in a window on your desktop. Answer it in a page you can send
+  someone, then go build the thing that runs all day.</p>
+
+  <h4>How it is built</h4>
+  <p>One HTML file. The record is raymarched in a fragment shader &mdash; no mesh,
+  no engine, no build step. It reads your own history export in the page and sends
+  nothing anywhere. There is no account, no backend and no analytics, which is also
+  why there is no guestbook: a room you could write in would need a server, and a
+  room only you could see would be a lie.</p>
+
+  <div class="sig">Made by Rishi &middot;
+    <a href="https://github.com/CodedRichy" target="_blank" rel="noopener">CodedRichy</a>
+  </div>
+</div>`;
+function showAbout(){
+  const p = ask({ title: 'DeadWax', body: 'a note from the person who made it',
+                  yes: 'Close', noCancel: true, html: ABOUT });
+  const box = document.querySelector('.about');
+  if(box){
+    const mark = () => box.classList.toggle('more',
+      box.scrollHeight - box.scrollTop - box.clientHeight > 6);
+    box.addEventListener('scroll', mark, { passive: true });
+    mark();
+  }
+  return p;
+}
+{
+  const ab = document.getElementById('bAbout');
+  if(ab) ab.onclick = showAbout;
 }
 {
   const vb = document.getElementById('verBtn');
@@ -4046,13 +4171,30 @@ const NOW = (() => {
   // surface noise is separate and deliberately NOT scaled with it: turning the
   // music down on a real deck does not quiet the stylus.
   const volEl = document.getElementById('sVol');
+  const VOL_KEY = 'deadwax.vol.v1';
   if(volEl){
+    // Restore before the first apply, so the player is created at the volume the
+    // listener left it at rather than snapping to 100% and then correcting.
+    try {
+      const saved = localStorage.getItem(VOL_KEY);
+      if(saved !== null){
+        const v = Math.max(0, Math.min(100, parseInt(saved, 10)));
+        if(Number.isFinite(v)) volEl.value = v;
+      }
+    } catch(e){ /* storage blocked; 100% is a fine default */ }
+
     const applyVol = () => {
       const v = +volEl.value;
       document.getElementById('vVol').textContent = v + '%';
       if(player && player.setVolume) window.YT_CTL.setVolume(v);
     };
     volEl.addEventListener('input', applyVol);
+    // Write on change, not input: dragging fires input per pixel and would hit
+    // localStorage a hundred times per gesture.
+    volEl.addEventListener('change', () => {
+      try { localStorage.setItem(VOL_KEY, String(+volEl.value)); } catch(e){}
+    });
+    applyVol();
     window.YT_APPLY_VOL = applyVol;
   }
 

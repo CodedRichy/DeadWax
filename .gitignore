@@ -12,3 +12,12 @@ deadwax-data.js
 # Scratch: agent walkthrough artifacts and staging for deletion.
 _uxwalk/
 _to_delete/
+
+# Verification scratch scripts, not part of the build.
+baseline-probe.js
+about-shot.js
+about-scroll.js
+vol-test.js
+about*.png
+baseline*.png
+v-*.png

@@ -41,8 +41,11 @@ const check = (name, pass, detail) => {
   });
   check('#8 empty state is off the record label', !emptyVis.overlapsLabel);
   check('#21 import offered on the empty state', emptyVis.importBtn);
-  check('#9 empty deck hides the transport',
-        emptyVis.transportVisible.length === 0, JSON.stringify(emptyVis.transportVisible));
+  // About is deliberately exempt from the noshelf hide-list: on an empty deck it
+  // is the only thing left in the bar, and a first-time visitor with nothing
+  // loaded is exactly who it is written for.
+  check('#9 empty deck hides the transport, keeps About',
+        emptyVis.transportVisible.join() === 'About', JSON.stringify(emptyVis.transportVisible));
 
   // ---- seed a shelf -----------------------------------------------------
   await page.evaluate(() => {

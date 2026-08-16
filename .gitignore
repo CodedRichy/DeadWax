@@ -1,23 +1,19 @@
 node_modules/
+
+# Secrets. Never commit, never open.
 .env
 .env.local
 
-# Playwright capture output — regenerate with `node shot.js` / `node orbit.js`
-*.png
-
-# Your own listening history + embedded album art. Never publish:
-# GitHub Pages serves the branch tree publicly.
+# Your own listening history with embedded album art. Never publish: GitHub
+# Pages serves the whole branch tree, so anything tracked here is public.
 deadwax-data.js
 
-# Scratch: agent walkthrough artifacts and staging for deletion.
-_uxwalk/
-_to_delete/
+# Everything under scripts/verify/ writes its screenshots beside itself.
+# Regenerate them by running the script; do not track the output.
+*.png
+!favicon-*.png
+!apple-touch-icon.png
+!docs/*.png
 
-# Verification scratch scripts, not part of the build.
-baseline-probe.js
-about-shot.js
-about-scroll.js
-vol-test.js
-about*.png
-baseline*.png
-v-*.png
+# Tool caches.
+.impeccable/hook.cache.json

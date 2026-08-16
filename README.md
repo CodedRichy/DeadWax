@@ -40,26 +40,17 @@ The parts that are easy to fake are the parts that give a render away, so they a
 
 ---
 
-## Running it locally
+## Where it is going
 
-```bash
-node scripts/serve-static.js     # http://localhost:8484
-```
+This page is the demo. The product is a **desktop app** — one that sits on your machine, watches what you are actually playing, and presses the record as you listen: no export to upload, no link to paste. The wear arrives on its own, over months, the way it does on a real shelf.
 
-Serve over `localhost`, not `127.0.0.1`. YouTube's IFrame API accepts one as a referrer origin and rejects the other with error 150 — the same code it uses for "the owner disabled embedding", so every video appears blocked.
+The web build exists because the surface had to be proved first. Whether wear reads as wear, whether the flip feels like an object, whether a stranger understands the disc without a legend — those are the same questions in a window on your desktop, and they are cheaper to answer in a page you can send someone.
 
-### Verification
+---
 
-The render is checked by measurement, not by eye:
+## How it is checked
 
-```bash
-node err-check.js      # boots clean, no dead bindings
-node ux-verify.js      # 20 interaction checks
-node flip-shot.js      # side split + the flip arc
-node edge-probe.js     # solves the edge-on angle from the camera
-node sync-probe.js     # needle position against the player clock
-node wear-check.js     # wear values across a play-count spread
-```
+The render is verified by measurement, not by eye. `scripts/verify/` holds the harness: boot and dead-binding checks, twenty interaction assertions, the side split and flip arc, the edge-on angle solved from the camera basis, needle position against the player clock, and wear values across a play-count spread.
 
 ---
 
@@ -79,9 +70,7 @@ This is not open source. No permission is granted to copy, modify, distribute, f
 
 If you want to use any of it, ask: [github.com/CodedRichy](https://github.com/CodedRichy)
 
-> **Note on forking.** GitHub's Terms of Service grant every user the right to view and fork any repository that is set to public, regardless of its licence. A licence file cannot override that. If preventing forks matters more than being seen, keep this repository private and publish only the Pages site — which is how it is currently configured.
->
-> Be aware that the app is a single client-side HTML file, so anyone who opens the live page can read its full source in their browser. The licence removes any implied permission to *use* that source; it cannot make the source unreadable.
+> **Note on forking.** GitHub's Terms of Service grant every user the right to view and fork any public repository, regardless of its licence. This repository is public by choice, so that is a trade made knowingly: the licence removes permission to *use* the work, not the ability to copy it. The same is true of the live page — it is a single client-side HTML file, so its full source is readable in any browser. Readable is not licensed.
 
 ### Third-party material
 

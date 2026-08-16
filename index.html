@@ -539,7 +539,15 @@
   body.uiopen #np,body.uiopen #liner,body.uiopen #empty{opacity:0;pointer-events:none}
   body.uiopen #np,body.uiopen #empty{transition:opacity .2s var(--ease)}
   /* No arm, nothing to cue. */
+  /* One transport, chosen by whether there is an arm to work.
+     Arm on  -> Cue / Drop. You lift the stylus to stop and set it down to start,
+                which is the only way a deck actually works: a stylus parked in a
+                spinning groove is how you damage a record.
+     Arm off -> Play / Pause, because with no arm there is nothing to lift.
+     Both at once was the bug -- Cue already pauses, so Play was a second button
+     doing the first one's job with none of its meaning. */
   body.noarm #bCue{display:none}
+  body:not(.noarm) #bPlay{display:none}
 
   /* Chrome belongs to the screen it operates. The paste bar used to be
      position:fixed at z-index 9 with no rule hiding it, so it floated over the
@@ -1954,8 +1962,9 @@ function ask({ title, body = '', fields = [], yes = 'Save', danger = false,
 // This is the same thing for the app: once the page is a URL other people
 // open, "which build am I looking at" stops being answerable from the render.
 // Newest first. Bump BUILD in the same commit as the change it names.
-const BUILD = '0.6';
+const BUILD = '0.7';
 const PRESSINGS = [
+  { v:'0.7', d:'2026-08-16', n:'Put the three bottom corners on <b>one line</b> &mdash; the title, the transport and the paste bar had been sitting at three different heights. Added <b>About</b>, a note on what this is and what it is meant to become. One transport now instead of two: the arm when there is an arm, Play when there is not. Your volume is remembered.' },
   { v:'0.6', d:'2026-08-16', n:'The shelf became a <b>crate</b> you riffle through. The flip is a real turn of the record rather than a camera swing, and side B finally holds its own songs.' },
   { v:'0.5', d:'2026-08-16', n:'Paste a YouTube link and it presses a record that plays. Listening-history import from Spotify, Apple Music and Takeout.' },
   { v:'0.4', d:'2026-08-15', n:'Followed what is actually playing: the needle tracks the video clock instead of a free-running timer.' },

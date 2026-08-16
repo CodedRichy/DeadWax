@@ -10,7 +10,21 @@
      looks like every video on the site is blocked. It is the page being
      refused, not the videos. -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Deadwax</title>
+<title>DeadWax</title>
+<meta name="description" content="A record that wears where you played it. Bring your listening history and the grooves come out already worn.">
+<!-- Cut from the stock record with scripts/make-favicon.js. The source is a
+     JPEG whose "transparency" is a painted checkerboard -- JPEG has no alpha --
+     so these are masked to the disc and written with a real alpha channel. -->
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<!-- Open Graph: this is a URL people send each other now. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="DeadWax">
+<meta property="og:description" content="A record that wears where you played it.">
+<meta property="og:image" content="https://codedrichy.github.io/DeadWax/favicon-512.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -115,6 +129,27 @@
     letter-spacing:.22em;text-transform:uppercase;text-align:right;
   }
   #cat b{color:var(--accent);font-weight:400}
+  /* #cat is pointer-events:none so it never eats a drag aimed at the record;
+     the one thing in it you can click has to opt back in. */
+  #verBtn{
+    display:block;margin:9px 0 0 auto;width:auto;padding:2px 0;border:0;background:none;
+    pointer-events:auto;cursor:pointer;
+    font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+    color:#4f4a43;
+  }
+  #verBtn:hover,#verBtn:focus-visible{color:var(--accent)}
+  /* The version history is a list, not a form, so it gets its own type inside
+     the shared dialog rather than a second dialog component. */
+  .vlog{max-height:46vh;overflow-y:auto;margin-top:4px}
+  .vlog .vrow{display:grid;grid-template-columns:64px 1fr;gap:14px;padding:11px 0;
+    border-top:1px solid #1a1920}
+  .vlog .vrow:first-child{border-top:0}
+  .vlog .vv{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--accent)}
+  .vlog .vrow.old .vv{color:var(--ink-3)}
+  .vlog .vd{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:#565049;margin-top:5px}
+  .vlog .vn{font-size:13px;line-height:1.5;color:var(--ink-2)}
+  .vlog .vn b{color:var(--ink);font-weight:400}
 
   /* ---- the record's own title block, set like a sleeve back ---- */
   /* Bottom-left corner, clear of the disc. It was riding at bottom:80px inside
@@ -490,10 +525,15 @@
      sentence vanished. And it pointed at an input 700px away in the corner
      with nothing connecting them. It now sits where the title block sits, in
      the same frame as the rest of the type, and carries its own actions. */
+  /* Same corner, same edge as #head and #np. This carried TWO conflicting left
+     declarations, and the winner was the frame gutter -- (100vw - fw)/2 + gut,
+     which is 198px at 1920 against everything else's 44px. The empty state sat
+     154px inboard of the wordmark above it while the paste bar opposite kept a
+     44px margin, so the page read lopsided. The empty state and #np occupy this
+     corner mutually exclusively, so they share its baseline too. */
   #empty{
-    position:fixed;left:var(--lx,var(--edge));bottom:calc(var(--edge) + 34px);
+    position:fixed;left:var(--edge);bottom:calc(var(--edge) + 46px);
     z-index:8;max-width:min(460px,46vw);text-align:left;display:none;
-    left:max(38px, calc((100vw - var(--fw))/2 + var(--gut)));
   }
   body.noshelf #empty{display:block}
   #empty b{
@@ -620,11 +660,15 @@
   <div class="spine"></div>
 </div>
 
-<div id="head"><h1>Deadwax</h1></div>
+<div id="head"><h1>DeadWax</h1></div>
 
 <div id="cat">
   <span id="catNo">DWX·001</span> · SIDE <b id="catSide">A</b><br>
   <span id="catRpm">33⅓ RPM</span>
+  <!-- The pressing number. Records carry a stamper revision in the deadwax;
+       this is the same idea for the app, and it is the only honest way to know
+       which build you are looking at once this is a URL other people open. -->
+  <button id="verBtn" title="What changed"></button>
 </div>
 
 <div id="np">
@@ -1804,17 +1848,22 @@ const rail = document.getElementById('rail');
 // Returns a promise: null if dismissed, otherwise an object of field values
 // (or true when there are no fields, i.e. a confirm). One component so every
 // question this app asks looks like it came from the same product.
-function ask({ title, body = '', fields = [], yes = 'Save', danger = false }){
+function ask({ title, body = '', fields = [], yes = 'Save', danger = false,
+               html = '', noCancel = false }){
   return new Promise(resolve => {
     const box = document.getElementById('modalFields');
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalBody').textContent  = body;
-    box.innerHTML = fields.map((f,i)=>
+    // `html` is for content this file authors itself -- the version log. It is
+    // never user input: anything coming from a record or a paste goes through
+    // the `fields` path, which escapes.
+    box.innerHTML = html || fields.map((f,i)=>
       `<label for="mf${i}">${esc(f.label)}</label>
        <input id="mf${i}" value="${esc(f.value || '')}" ${f.placeholder
          ? `placeholder="${esc(f.placeholder)}"` : ''}>`).join('');
     const ok = document.getElementById('modalYes');
     const no = document.getElementById('modalNo');
+    no.style.display = noCancel ? 'none' : '';
     ok.textContent = yes;
     ok.classList.toggle('danger', danger);
     document.body.classList.add('modalopen');
@@ -1848,6 +1897,39 @@ function ask({ title, body = '', fields = [], yes = 'Save', danger = false }){
       if(e.target.id === 'modal') done(null);      // click the scrim to dismiss
     };
   });
+}
+
+// ---- pressing history -----------------------------------------------------
+// A record's deadwax carries the stamper revision scratched into the run-out.
+// This is the same thing for the app: once the page is a URL other people
+// open, "which build am I looking at" stops being answerable from the render.
+// Newest first. Bump BUILD in the same commit as the change it names.
+const BUILD = '0.6';
+const PRESSINGS = [
+  { v:'0.6', d:'2026-08-16', n:'The shelf became a <b>crate</b> you riffle through. The flip is a real turn of the record rather than a camera swing, and side B finally holds its own songs.' },
+  { v:'0.5', d:'2026-08-16', n:'Paste a YouTube link and it presses a record that plays. Listening-history import from Spotify, Apple Music and Takeout.' },
+  { v:'0.4', d:'2026-08-15', n:'Followed what is actually playing: the needle tracks the video clock instead of a free-running timer.' },
+  { v:'0.3', d:'2026-08-15', n:'Centred the record in the window and moved the tracklist to the right margin.' },
+  { v:'0.2', d:'2026-08-14', n:'Rebuilt the tonearm against a real S-arm: solid gimbal, closed headshell, depth-sorted faces.' },
+  { v:'0.1', d:'2026-08-13', n:'First pressing. A record whose grooves wear in proportion to what you have played.' },
+];
+
+function showPressings(){
+  return ask({
+    title: 'Pressings',
+    body: 'you are on ' + BUILD,
+    yes: 'Close',
+    noCancel: true,
+    html: '<div class="vlog">' + PRESSINGS.map(p =>
+      `<div class="vrow${p.v === BUILD ? '' : ' old'}">
+         <div><div class="vv">v${esc(p.v)}</div><div class="vd">${esc(p.d)}</div></div>
+         <div class="vn">${p.n}</div>
+       </div>`).join('') + '</div>',
+  });
+}
+{
+  const vb = document.getElementById('verBtn');
+  if(vb){ vb.textContent = 'v' + BUILD; vb.onclick = showPressings; }
 }
 
 // ---- crate geometry -------------------------------------------------------

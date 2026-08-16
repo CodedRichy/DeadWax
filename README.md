@@ -1,80 +1,76 @@
-# Deadwax
+# DeadWax
 
-A desktop turntable that renders **your** copy of what's playing — worn exactly as much as you've actually played it.
+**A record that wears where you played it.**
 
-Prototype stage. This repo currently contains the platter renderer only, not the app.
+Every groove on a real record degrades in proportion to how many times a stylus has crossed it. Play one track to death and you can see it — that band goes milky while the rest of the disc stays mirror-black. DeadWax renders that, driven by your actual listening history.
 
-## What's here
+It is one self-contained HTML file. No build step, no server, no account.
 
-| file | what it is |
-|---|---|
-| `deadwax-platter.html` | The whole prototype. Single-file WebGL2 platter + interactive tonearm. Open it in a browser. |
-| `shot.js` | Playwright capture across wear / density / light / spin states |
-| `test-interact.js` | Drives real pointer events to verify the arm drags and seeks |
-| `0*.png` | Reference captures |
+**→ [codedrichy.github.io/DeadWax](https://codedrichy.github.io/DeadWax/)**
 
-## Running it
+![DeadWax](docs/hero.png)
 
-Just open `deadwax-platter.html`. No build, no dependencies.
+---
 
-For screenshots:
+## What it does
+
+**The wear is real data.** Bands are laid out by track duration and shaded by play count on a log curve, normalised against both the record's own range and an absolute reference. A track played 141 times and one played 9 times do not look alike.
+
+The scatter is deliberately **view-independent** — worn vinyl is micro-scratched, and micro-scratches scatter diffusely, so a played band reads as worn from every angle rather than only where the specular highlight happens to fall. That was the difference between the wear being the point and the wear being invisible.
+
+**Bring your own history.** Drop in a Spotify extended-history export, a Spotify `StreamingHistory*.json`, an Apple Music CSV, or a Google Takeout `watch-history.json`. Plays count at 30 seconds — Spotify's own stream threshold — so skips do not wear grooves. Everything is parsed in the page; no file leaves your machine.
+
+**Or paste a YouTube link.** It looks the track up, presses a record, and plays it. The needle is driven by the player's clock, so dragging the tonearm seeks the video and scrubbing the video moves the needle.
+
+**Riffle the crate.** Records stand on edge, packed and leaning. Scroll, drag, or arrow through them and pull one out.
+
+![The crate](docs/crate.png)
+
+---
+
+## The physical model
+
+The parts that are easy to fake are the parts that give a render away, so they are not faked:
+
+- **The flip** is a rigid-body turn of the record — it rises clear of the spindle, rotates about its own diameter, and settles. The camera does not move. The face swaps at the *measured* edge-on angle (−33.5° at the default rake, solved from the camera basis), not at 90°, where the disc is actually more face-on than flat.
+- **The tonearm** is a swept S-arm with a real gimbal, closed headshell, and per-face backface culling with painter's-algorithm depth sorting.
+- **The pressing is off-centre** by ~0.7 mm, so the disc orbits the spindle once per revolution, like every record ever made.
+- **Sides split by time, not by count** — 22 minutes a side, which is what a 12″ at 33⅓ actually holds. A record that fits on one side is honestly one-sided.
+- **Surface noise** is modelled from measurements: a floor near −48 dB, dominated by content *below* 100 Hz. It is rumble, not hiss.
+
+---
+
+## Running it locally
 
 ```bash
-npm i -D playwright
-npx playwright install chromium
-node shot.js
-node test-interact.js
+node scripts/serve-static.js     # http://localhost:8484
 ```
 
-## What the renderer does
+Serve over `localhost`, not `127.0.0.1`. YouTube's IFrame API accepts one as a referrer origin and rejects the other with error 150 — the same code it uses for "the owner disabled embedding", so every video appears blocked.
 
-One fullscreen quad, one fragment shader. No geometry, no Three.js.
+### Verification
 
-- **Real RIAA dimensions** — 301.6 mm disc (never a true 12"), 7.26 mm hole, label 100 mm, music band 120.7–292.1 mm dia
-- **Groove bands are the album** — variable-pitch cutting means loud passages force wider spacing, so the visible banding is the song structure. Band width is track length.
-- **Wear is per-track play count**, mapped to radial position — grooves you've worn reflect softly, tracks you've never reached stay mirror-sharp. Gloss loss only, never grime. Normalised against your own maximum on a log curve.
-- **Anisotropic specular** with the tangent following the groove circle, so reflections smear into arcs the way real vinyl does
-- **Retroreflective iridescence** at grazing incidence only, banded radially
-- **Rotation cues that are physically real** — warp (no record is flat), off-centre pressing (~0.7 mm), a hairline scratch, dust. Concentric grooves can't show rotation on their own.
+The render is checked by measurement, not by eye:
 
-## Interaction
+```bash
+node err-check.js      # boots clean, no dead bindings
+node ux-verify.js      # 20 interaction checks
+node flip-shot.js      # side split + the flip arc
+node edge-probe.js     # solves the edge-on angle from the camera
+node sync-probe.js     # needle position against the player clock
+node wear-check.js     # wear values across a play-count spread
+```
 
-- **Drag the tonearm** to seek. Readout names the track, position and play count.
-- Arm lifts while carried, drops when released.
-- **Cue lever** raises and pauses.
-- Drag the background to move the light; scroll to zoom.
+---
 
-Every gesture maps to a real Windows SMTC call (`TryChangePlaybackPositionAsync`, `TryPauseAsync`, `TryPlayAsync`), so none of it is a mockup that can't be built.
+## Privacy
 
-## The deck
+`deadwax-data.js` — a personal listening history with embedded album art — is gitignored and never published. GitHub Pages serves the branch tree publicly, so anything tracked is public.
 
-The camera is a real perspective camera — per-pixel ray against the record plane,
-not a squashed ellipse. Orbit it and the record reads as a solid object.
+The shipped build stores your crate in `localStorage` only. It has no backend, no analytics, and no account.
 
-- **Plinth** with start/stop, 33/45 with a green pilot, pitch fader and centre
-  detent, red strobe lamp, power switch, dust-cover hinge sockets, badge plate
-- **Strobe dots** on the platter rim, four rows, lit only by the red lamp.
-  Technics kept the strobe long after it was functionally obsolete because DJs
-  touched the dots to nudge speed — the vestigial detail is the culture.
-- **Arm base furniture** — every piece is a solid standing on the deck (bottom
-  ellipse, side quad, top ellipse), depth-sorted painter's algorithm so nothing
-  punches through the pillar when the camera swings behind it. Gimbal pillar,
-  knurled anti-skate dial, cue lever whose paddle throws when you cue, arm rest
-  with a fork clip.
+---
 
-## Known issues
+## Credits
 
-- Tonearm is still stylised — the S-bend and headshell need work
-- Track band edges are softer than real pressings
-- Platter mat barely reads
-- Label is canvas-drawn placeholder art
-- No plinth feet — the deck is a flat plane with no side thickness, so they'd
-  have nothing to attach to
-- Widget mode not built: same renderer, camera pulls in and the plinth is hidden.
-  At 180px the full deck is illegible clutter.
-
-## Status
-
-The product thesis is narrower than it started. **Longplay** (iOS/Mac) already ships the play-count-sized album wall and a "Negligence" sort — it's the incumbent. What's left as genuinely novel is wear-as-texture on a photoreal record, and Windows, which no competitor serves.
-
-Next step is to make the record good enough to post, then post it. Visual products validate visually.
+Record icon adapted from a stock vinyl illustration; masked to a real alpha channel by `scripts/make-favicon.js`. Type is [Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif).

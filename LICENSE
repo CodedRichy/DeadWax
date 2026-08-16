@@ -39,6 +39,10 @@ property of their respective owners, under their own terms:
 
   - Instrument Serif, by Rodrigo Fuenzalida, used under the SIL Open Font
     License 1.1. https://fonts.google.com/specimen/Instrument+Serif
+    The font files themselves are redistributed in this repository at
+    fonts/instrument-serif-*.woff2. The OFL permits that redistribution; the
+    font remains the property of its author under its own licence, and nothing
+    in the terms above applies to it.
 
   - The record illustration that favicon-*.png and apple-touch-icon.png are
     derived from is a third-party stock image. It was not created by the

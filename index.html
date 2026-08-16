@@ -25,10 +25,35 @@
 <meta property="og:description" content="A record that wears where you played it.">
 <meta property="og:image" content="https://codedrichy.github.io/DeadWax/favicon-512.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/instrument-serif-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  /* Instrument Serif, self-hosted. It used to come from Google Fonts, which
+     made every visit a third-party request for a font the page cannot render
+     without -- and left the desktop build depending on a network it may not
+     have. SIL Open Font License 1.1; see LICENSE. Same four subsets Google
+     served, same unicode-ranges, so the browser still only fetches the slice
+     it needs. */
+  @font-face{
+    font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:swap;
+    src:url(fonts/instrument-serif-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+  }
+  @font-face{
+    font-family:'Instrument Serif';font-style:normal;font-weight:400;font-display:swap;
+    src:url(fonts/instrument-serif-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+  }
+  @font-face{
+    font-family:'Instrument Serif';font-style:italic;font-weight:400;font-display:swap;
+    src:url(fonts/instrument-serif-latin-italic.woff2) format('woff2');
+    unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+  }
+  @font-face{
+    font-family:'Instrument Serif';font-style:italic;font-weight:400;font-display:swap;
+    src:url(fonts/instrument-serif-latin-ext-italic.woff2) format('woff2');
+    unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+  }
+
   :root{
     /* Ink on paper, unlit. The record is the only thing that reflects. */
     --bg:#08080a; --paper:#0e0e11;
@@ -64,6 +89,9 @@
        The title block and the paste bar are anchored to the same value, which is
        why all three read as one row rather than three floating heights. */
     --baseline: calc(var(--edge) + 16px);
+    /* Crate sleeve edge. Everything else in the crate is derived from it, in CSS
+       and in JS, so this is the single handle on how big the crate reads. */
+    --slv: clamp(300px, min(46vh, 30vw), 460px);
 
     /* Liner column geometry, hoisted out of #liner so the catalogue line and
        the hint can align to the same column instead of guessing at it.
@@ -257,7 +285,20 @@
     font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;
     color:var(--ink-3);padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid var(--rule);
   }
-  #liner ol{list-style:none;margin:0;padding:0}
+  /* A twelve-track side ran straight down behind the paste bar and the last rows
+     were unreadable. Bound the LIST, not #liner: #liner's scrim is an absolutely
+     positioned ::before with negative insets, and an overflow container on the
+     parent would clip it into a hard-edged rectangle. The column is centred, so
+     the budget is twice the smaller half. */
+  #liner ol{
+    list-style:none;margin:0;padding:0;
+    max-height:calc(100vh - 2*var(--baseline) - 104px);
+    overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;
+  }
+  #liner ol::-webkit-scrollbar{width:0;height:0;display:none}
+  /* Once it scrolls it needs the pointer back to take a wheel event. Rows stay
+     inert unless .playable, exactly as before. */
+  #liner ol.tall{pointer-events:auto}
   #liner li{
     display:grid;grid-template-columns:20px 1fr auto;gap:12px;align-items:baseline;
     padding:7px 0;font-size:13px;line-height:1.25;color:var(--ink-3);
@@ -269,6 +310,14 @@
   #liner li .n,#liner li .p{
     font-family:var(--mono);font-size:10px;color:var(--ink-3);
     font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;
+  }
+  /* One type voice, finally: serif is content, mono is machine. Track names are
+     content -- they were the last thing on the page still set in system sans,
+     sitting under an Instrument Serif album title, and that mismatch was the
+     only generic-looking type left. Real liner notes are set in a serif too.
+     Sized up a step because a display face at 13px goes spindly. */
+  #liner li .tt{
+    font-family:var(--display);font-size:16px;line-height:1.15;letter-spacing:.005em;
   }
   /* a half-step under the track title -- the number is an index, not content */
   #liner li .n{color:oklch(41% .008 80)}
@@ -368,8 +417,12 @@
      and leaning, and you tip one toward you to read it.
      That is the browsing metaphor here, and it is the one thing in this app a
      playback app structurally cannot copy. */
+  /* Height follows the sleeve. It was 420px flat, from when sleeves were 300px:
+     once --slv grew past that the box clipped the artwork it exists to show.
+     The extra 40% is headroom for the lean and the disc sliding out. */
   #crate{
-    position:absolute;left:0;right:0;top:50%;height:420px;margin-top:-190px;
+    position:absolute;left:0;right:0;top:50%;
+    height:calc(var(--slv) * 1.4);margin-top:calc(var(--slv) * -0.7);
     perspective:1500px;perspective-origin:50% 42%;
     overflow:hidden;
   }
@@ -378,8 +431,13 @@
     transform-style:preserve-3d;
     transition:transform .52s var(--ease);
   }
+  /* Sized to the window, not to 300px flat. On a 1013px-tall screen a fixed
+     sleeve filled under a third of the frame and the crate read as a row of
+     small floating cards in a lot of black. The record is the subject; it should
+     take the room. Capped so it never outgrows its caption on a tall monitor. */
   .slv{
-    position:absolute;top:50%;left:0;width:300px;height:300px;margin-top:-150px;
+    position:absolute;top:50%;left:0;
+    width:var(--slv);height:var(--slv);margin-top:calc(var(--slv) / -2);
     transform-style:preserve-3d;cursor:pointer;
     transition:transform .52s var(--ease),opacity .52s var(--ease);
     will-change:transform;
@@ -532,7 +590,8 @@
   /* Keep the tray clear of the YouTube panel. The player is at a higher stack
      level so nothing is ever drawn in front of it -- which is the actual rule
      -- but running controls underneath it still looks like a collision. */
-  body.yton #ui{padding-right:calc(var(--edge) + 262px)}
+  /* Track the bar's real width instead of the old fixed 246+16. */
+  body.yton #ui{padding-right:calc(var(--edge) + clamp(228px,24vw,336px) + 16px)}
   /* The title block and the tracklist live in the bottom corners, which is
      exactly where the tray comes up. Take them out while it is open rather
      than stacking two typographic systems on top of each other. */
@@ -628,13 +687,23 @@
      grows upward from it. Anchoring the block instead let the status message and
      the video panel shove the input up by their own height, so the paste bar
      drifted off the line the moment anything appeared under it. */
-  #yt{position:fixed;right:var(--edge);bottom:var(--baseline);z-index:9;width:246px;
+  /* 246px left about twenty characters visible in the input -- a YouTube URL is
+     forty-three, so you could never see what you had pasted, and the status line
+     was breaking words to fit. Sized to hold a full watch?v= link instead. */
+  /* Clamped, not fixed: at 336px flat the bar reached the centred transport on a
+     900px window and painted over CONTROLS and ABOUT. It gives width back as the
+     window narrows, and never takes more than a quarter of it. */
+  #yt{position:fixed;right:var(--edge);bottom:var(--baseline);z-index:9;
+    width:clamp(228px,24vw,336px);
     display:flex;flex-direction:column-reverse;gap:8px}
   .ytrow{display:flex;gap:0}
   #ytUrl{
     flex:1;min-width:0;background:rgba(0,0,0,.6);border:1px solid #22222a;
     border-right:none;color:var(--ink-2);padding:7px 9px;
-    font-family:var(--mono);font-size:9.5px;letter-spacing:.10em;
+    /* Tracking is decoration on a label and an obstacle on a URL -- it is the
+       one string here the reader has to actually verify. */
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.02em;
+    text-overflow:ellipsis;
   }
   #ytUrl:focus{outline:none;border-color:var(--accent);color:var(--ink)}
   #ytUrl::placeholder{color:#4a4640;text-transform:uppercase;letter-spacing:.16em}
@@ -645,12 +714,27 @@
   }
   #ytGo:hover{border-color:var(--accent);color:var(--accent)}
   /* 246x208 -- comfortably over the 200x200 floor with the controls visible. */
-  #ytHost{width:246px;height:208px;background:#000;display:none}
+  /* YouTube's terms require the player stay visible and unobscured, so it cannot
+     be hidden -- but a bare black rectangle floating by the corner read as a
+     debug embed someone forgot to remove. Given the same 1px rule as the input
+     it sits under, plus a caption, it reads as the deck's monitor instead: a
+     part of the instrument rather than a leak. Width follows the bar now; it was
+     pinned at the old fixed 246px and stuck out once the bar became fluid. */
+  #ytHost{width:100%;aspect-ratio:16/9;background:#000;display:none;
+    border:1px solid #22222a}
   #ytHost iframe{display:block;width:100%;height:100%;border:0}
   body.yton #ytHost{display:block}
+  #ytCap{
+    display:none;font-family:var(--mono);font-size:8.5px;color:#4a4640;
+    letter-spacing:.22em;text-transform:uppercase;
+  }
+  body.yton #ytCap{display:block}
   #ytMsg{
     font-family:var(--mono);font-size:9px;color:#4a4640;letter-spacing:.14em;
     text-transform:uppercase;line-height:1.5;
+    /* Never split a word to make it fit. Uppercase mono with .14em tracking is
+       already hard to read; broken across a line it stops being language. */
+    word-break:keep-all;overflow-wrap:normal;hyphens:none;text-wrap:pretty;
   }
   #ytMsg.bad{color:#8a6a5e}
   #importMsg{
@@ -672,8 +756,11 @@
      bottom-left while #hint repeated "flip" and "shelf" bottom-right and the
      controls tab ran down the right edge -- three separate places telling you
      about the same four actions, none of them on the same baseline. */
+  /* nowrap: adding About pushed the row past its box on a narrow window and the
+     last button dropped to a second line, which broke the shared baseline the
+     three corners are aligned to. */
   #cue{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--edge);
-    z-index:7;display:flex;gap:0;align-items:stretch}
+    z-index:7;display:flex;gap:0;align-items:stretch;flex-wrap:nowrap;white-space:nowrap}
   #cue button{
     width:auto;padding:0;margin:0;border:0;background:none;
     font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
@@ -867,6 +954,8 @@
        it, the video above that. Source order is bottom-up on purpose. -->
   <div id="ytMsg"></div>
   <div id="ytHost"><div id="ytPlayer"></div></div>
+  <!-- Column-reverse, so this caption renders ABOVE the player it labels. -->
+  <div id="ytCap">source · youtube</div>
 </div>
 
 <script type="x-shader/x-vertex" id="vs">#version 300 es
@@ -1043,7 +1132,12 @@ void main(){
   }
 
   // pixel footprint on the surface — drives antialiasing and groove LOD
-  float aa = max(1.5 * length(vec2(dFdx(r), dFdy(r))), 1e-5);
+  // Clamped at BOTH ends. The lower bound keeps the edge smoothstep from
+  // collapsing to zero width. The upper bound matters more: at a shallow tilt
+  // the disc is nearly edge-on, one pixel spans a huge slice of the surface,
+  // and an unbounded footprint widened the rim feather until the record's
+  // silhouette dissolved into the background instead of ending.
+  float aa = clamp(1.5 * length(vec2(dFdx(r), dFdy(r))), 1e-5, 0.06);
 
   if(!onRecord){
     // ---- rim, mat, shadow, background --------------------------------
@@ -1386,6 +1480,9 @@ void main(){
 // The paste-a-link path and dropped local files are the only data sources, and
 // neither needs an account. Set false to get the private/local behaviour back.
 const PUBLIC = true;
+// Opt in to the workbench with ?dev. Everything gated on this is unfinished
+// chrome that a visitor should never be one keystroke away from.
+const DEV = /[?&]dev\b/.test(location.search);
 
 // Some artists letter-space their titles and iTunes stores them that way, so
 // "M a k e  I t  T o  T h e  M o r n i n g" arrives verbatim. Rendered through the
@@ -1623,6 +1720,12 @@ function layout(rec, side){
          +   `<button class="del" data-tdel="${i}" title="Remove track">Del</button>`
          + `</span></li>`;
   }).join('');
+  // Take the pointer back only when the list actually overflows, so a short
+  // side stays fully click-through to the record behind it.
+  {
+    const ol = el('linerList');
+    ol.classList.toggle('tall', ol.scrollHeight > ol.clientHeight + 2);
+  }
 
   el('tb').innerHTML = bands.map((b,i)=>{
     const cls = b.wear>.72?'hot':(b.wear<.22?'cold':'');
@@ -1962,8 +2065,9 @@ function ask({ title, body = '', fields = [], yes = 'Save', danger = false,
 // This is the same thing for the app: once the page is a URL other people
 // open, "which build am I looking at" stops being answerable from the render.
 // Newest first. Bump BUILD in the same commit as the change it names.
-const BUILD = '0.7';
+const BUILD = '0.8';
 const PRESSINGS = [
+  { v:'0.8', d:'2026-08-16', n:'A cleanup pressing. The <b>crate fills the frame</b> now instead of floating in it, and track names are set in the same serif as the album — the last generic type on the page. The needle readout stopped lying: it says <i>stylus up</i> or <i>paused</i> rather than printing a running time at a stopped deck. Space works the transport. The typeface is bundled, so the page asks nothing of anyone else.' },
   { v:'0.7', d:'2026-08-16', n:'Put the three bottom corners on <b>one line</b> &mdash; the title, the transport and the paste bar had been sitting at three different heights. Added <b>About</b>, a note on what this is and what it is meant to become. One transport now instead of two: the arm when there is an arm, Play when there is not. Your volume is remembered.' },
   { v:'0.6', d:'2026-08-16', n:'The shelf became a <b>crate</b> you riffle through. The flip is a real turn of the record rather than a camera swing, and side B finally holds its own songs.' },
   { v:'0.5', d:'2026-08-16', n:'Paste a YouTube link and it presses a record that plays. Listening-history import from Spotify, Apple Music and Takeout.' },
@@ -2112,14 +2216,25 @@ function renderShelf(){
 // Position every sleeve relative to the one in focus.
 function layoutCrate(){
   const slvs = rail.children;
+  // The spacings below were measured against a 300px sleeve. --slv is sized to
+  // the window now, so scale them with it -- otherwise a bigger sleeve keeps the
+  // old gaps and the crate packs into an overlapping heap.
+  //
+  // Read the rendered width, NOT the custom property. getPropertyValue('--slv')
+  // hands back the literal string "clamp(300px, min(46vh, 30vw), 460px)" -- an
+  // unregistered custom property is never computed to a pixel value -- so
+  // parseFloat returned NaN, k silently fell back to 1, and the sleeve grew
+  // while its own centring offset did not. The crate sat 96px right of centre.
+  const S = (slvs[0] && slvs[0].offsetWidth) || 300;
+  const k = S / 300;
   for(let i=0;i<slvs.length;i++){
     const el = slvs[i], d = i - crateIdx;
     const far = Math.abs(d) > SLV_VIS;
     // Sleeves are anchored at the rail (screen centre); shift each so the
     // focused one lands centred and the rest pack away on either side.
-    const x = d*SLV_STEP + (d > 0 ? SLV_PART : d < 0 ? -SLV_PART : 0) - 150;
+    const x = (d*SLV_STEP + (d > 0 ? SLV_PART : d < 0 ? -SLV_PART : 0))*k - S/2;
     const rot = d === 0 ? SLV_FACE : SLV_LEAN;
-    const z   = d === 0 ? 120 : -Math.abs(d)*7;
+    const z   = (d === 0 ? 120 : -Math.abs(d)*7)*k;
     el.style.transform = `translate3d(${x}px,0,${z}px) rotateY(${rot}deg)`;
     el.classList.toggle('on', d === 0);
     el.classList.toggle('far', far);
@@ -2351,12 +2466,25 @@ addEventListener('keydown', e=>{
   if(inCrate && (k === 'arrowleft'  || k === 'arrowup'))   { e.preventDefault(); crateTo(crateIdx-1); return; }
   if(inCrate && (k === 'arrowright' || k === 'arrowdown')) { e.preventDefault(); crateTo(crateIdx+1); return; }
   if(inCrate && (k === 'enter' || k === ' '))              { e.preventDefault(); putOn(crateIdx);     return; }
+  // Space works the transport, and which transport that is depends on whether
+  // there is an arm to work -- same rule as the buttons. Without this the deck
+  // had keys for flip and shelf but none for the one control people reach for.
+  if(k === ' ' || k === 'k'){
+    e.preventDefault();
+    const b = document.getElementById(
+      document.body.classList.contains('noarm') ? 'bPlay' : 'bCue');
+    if(b && !b.disabled) b.click();
+    return;
+  }
   if(k==='f'){ if(!document.getElementById('bFlip').disabled) flip(); }
   // 's' used to toggle body.shelfopen directly, which is how the shelf and the
   // tray ended up open at the same time with the Controls button still saying
   // "Close". Both routes go through setPanel now.
   else if(k==='s') inCrate ? closeShelf() : openShelf();
-  else if(k==='d') document.body.classList.toggle('debug');
+  // Render-grading controls are a workbench, not a feature. On the public page a
+  // stray 'd' used to drop the whole unfinished panel in front of a visitor, so
+  // the key only exists when the build was opened with ?dev.
+  else if(k==='d' && DEV) document.body.classList.toggle('debug');
   else if(e.key==='Escape') closeShelf();
 });
 
@@ -2920,10 +3048,22 @@ function drawArm3D(stylusR, W, Hpx, lift){
   // Gimbal yoke. The bearing housing alone reads as a lump the tube passes
   // through; the two cheeks either side are what make it a gimbal -- the
   // horizontal axis has to be visible or the arm looks glued to its post.
-  const yoke = [-1, 1].map(sgn => sweep(
-    [[piv[0] + v[0]*0.062*sgn, piv[1] + v[1]*0.062*sgn, ARM_Z - 0.030],
-     [piv[0] + v[0]*0.062*sgn, piv[1] + v[1]*0.062*sgn, ARM_Z + 0.052]],
-    ()=>0.030, [72,70,65], 34, 14)).join('');
+  // Painter's algorithm ACROSS the two cheeks, not just inside each one. sweep()
+  // sorts its own strips, but the pair was emitted in fixed -1,+1 order, so at
+  // half the camera angles the far cheek painted over the near one. Two solids
+  // with no depth relationship read as two thumbs rather than one bearing.
+  // Farthest first: larger depth along the view direction is farther away.
+  const yoke = [-1, 1]
+    .map(sgn => {
+      const cx = piv[0] + v[0]*0.062*sgn, cy = piv[1] + v[1]*0.062*sgn;
+      return {
+        d: (cx - B.pos[0])*B.fwd[0] + (cy - B.pos[1])*B.fwd[1],
+        s: sweep([[cx, cy, ARM_Z - 0.030], [cx, cy, ARM_Z + 0.052]],
+                 ()=>0.030, [72,70,65], 34, 14),
+      };
+    })
+    .sort((a, b) => b.d - a.d)
+    .map(o => o.s).join('');
 
   // The collar where the tube meets the headshell -- a real arm has a knurled
   // finger nut there. Without it the shell reads as a separate object hanging
@@ -3197,7 +3337,15 @@ function updateStylusInfo(){
   // number the track as the album does, not as the side does -- the liner
   // notes are album-absolute and the two must agree
   const offset = sideOffset(REC, SIDE);
-  box.innerHTML = `${String(offset+i+1).padStart(2,'0')} · <b>${tidyTitle(b.t)}</b> · ${fmt(into)} / ${fmt(b.sec)}`;
+  // Say what the needle is actually doing. The readout used to print a running
+  // time whatever the state, so a lifted stylus and a paused deck both looked
+  // like playback in progress -- a clock that keeps its last value reads as a
+  // clock that is still running. A raised stylus is not at a time at all, so it
+  // does not get one.
+  const where = `${String(offset+i+1).padStart(2,'0')} · <b>${tidyTitle(b.t)}</b>`;
+  box.innerHTML = lifting ? `${where} · stylus up`
+                : playing ? `${where} · ${fmt(into)} / ${fmt(b.sec)}`
+                          : `${where} · ${fmt(into)} / ${fmt(b.sec)} · paused`;
   // the liner notes follow the needle
   list.querySelectorAll('li').forEach(n=>n.classList.toggle('now', +n.dataset.i === i));
 }
@@ -3328,6 +3476,10 @@ function setPlaying(v){
   el('bPlay').textContent = v ? 'Pause' : 'Play';
   S.spin.checked = v;
   if(!v) surface(false); else if(!lifting) surface(true);
+  // The readout reports state now, not just position, so it has to be redrawn
+  // when the state changes -- otherwise it keeps the last frame's wording and
+  // says "playing" at a stopped deck.
+  updateStylusInfo();
 }
 // Every one of these used to be decorative whenever a YouTube record was on the
 // platter: the platter stopped, the arm lifted, the camera swept -- and the song
@@ -3350,6 +3502,10 @@ el('bCue').onclick  = e=>{
   const c = ytc();
   if(lifting){ needleLift(); if(c) c.pause(); else setPlaying(false); }
   else { needleDrop(); if(c) c.play(); else setPlaying(true); }
+  // needleLift() bails early when there is no AudioContext yet, so the readout
+  // cannot be refreshed from inside it. Do it here, where the state actually
+  // changed, and it holds whether or not audio has ever been started.
+  updateStylusInfo();
 };
 
 const stage=el('stage');
@@ -3407,7 +3563,14 @@ function resize(){
   const dpr=Math.min(devicePixelRatio||1,2);
   cv.width=Math.round(innerWidth*dpr); cv.height=Math.round(innerHeight*dpr);
 }
-addEventListener('resize',resize); resize();
+// --slv is viewport-relative, so the crate's spacings have to be recomputed when
+// the window changes or the sleeves keep the geometry of the old size.
+addEventListener('resize', () => {
+  resize();
+  if(typeof layoutCrate === 'function' && document.body.classList.contains('shelfopen'))
+    layoutCrate();
+});
+resize();
 
 let armT=0;
 function frame(now){
@@ -3482,6 +3645,17 @@ function frame(now){
       flipAnim = null;
     }
   }
+  // The crate covers the record completely, so every one of these pixels is
+  // raymarched and then painted over. Simulation above this line still runs --
+  // the platter keeps its momentum, the arm keeps creeping, the noise keeps
+  // sagging -- so closing the crate returns you to a deck that kept living.
+  // Only the drawing stops. The flip is exempt: it can be mid-arc when the
+  // crate opens, and a frozen half-turned record is worse than the cost.
+  if(document.body.classList.contains('shelfopen') && !flipAnim){
+    requestAnimationFrame(frame);
+    return;
+  }
+
   resize();
   gl.viewport(0,0,cv.width,cv.height);
   // y inverts (gl_FragCoord.y counts up, project() counts down); x does not
@@ -3949,9 +4123,22 @@ const NOW = (() => {
     return hit / Math.min(A.size, B.size);      // containment, not Jaccard
   }
 
+  // One lookup in flight at a time. Press two records quickly and the second
+  // search would race the first: whichever response landed last won, so you
+  // could paste link B and end up with A's tracklist. Aborting the previous
+  // request makes the last press the one that counts, every time.
+  let lookupAbort = null;
+  function abortLookup(){
+    if(lookupAbort) lookupAbort.abort();
+    lookupAbort = null;
+  }
+
   async function lookup(artist, track){
+    abortLookup();
+    lookupAbort = new AbortController();
+    const sig = lookupAbort.signal;
     const term = encodeURIComponent(`${artist} ${track}`);
-    const r = await fetch(`${ITU}/search?term=${term}&entity=song&limit=5`);
+    const r = await fetch(`${ITU}/search?term=${term}&entity=song&limit=5`, { signal: sig });
     if(!r.ok) throw new Error('itunes ' + r.status);
     const j = await r.json();
     const cands = j.results || [];
@@ -3970,7 +4157,8 @@ const NOW = (() => {
 
     let tracks = null;
     if(hit.collectionId){
-      const r2 = await fetch(`${ITU}/lookup?id=${hit.collectionId}&entity=song&limit=60`);
+      const r2 = await fetch(`${ITU}/lookup?id=${hit.collectionId}&entity=song&limit=60`,
+                             { signal: sig });
       if(r2.ok){
         const j2 = await r2.json();
         tracks = (j2.results||[])
@@ -4117,7 +4305,13 @@ const NOW = (() => {
     say('looking up ' + g.artist);
     let meta = null;
     try { meta = await lookup(g.artist, g.track); }
-    catch(e){ say('no confident match · using the video title', true); }
+    catch(e){
+      // An abort means a newer press superseded this one. That press owns the
+      // status line now, so saying anything here would overwrite its message
+      // with a failure that did not happen.
+      if(e && e.name === 'AbortError') return;
+      say('no confident match · using the video title', true);
+    }
 
     const album  = (meta && meta.album)  || g.track;
     const artist = (meta && meta.artist) || g.artist;
@@ -4211,6 +4405,13 @@ const NOW = (() => {
   // which stands its own creep down while this returns true.
   window.YT_SYNC = function(){
     if(!syncing || !player || !player.getCurrentTime) return false;
+    // The video must belong to the groove the stylus is actually sitting in.
+    // Without this, riffling to another record while a video played left the old
+    // clock driving the new record's bands -- the needle tracked a song that was
+    // not on the disc in front of you. Derived rather than remembered, so there
+    // is no second piece of state to keep in step.
+    const cur = REC && REC.tracks && REC.tracks[trackIndex(REC, SIDE, bandIdx)];
+    if(!cur || !currentVid || cur.vid !== currentVid) return false;
     let t, d;
     try { t = player.getCurrentTime(); d = player.getDuration(); } catch(e){ return false; }
     if(!d || d <= 0) return false;

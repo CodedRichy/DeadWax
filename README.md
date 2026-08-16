@@ -76,6 +76,6 @@ If you want to use any of it, ask: [github.com/CodedRichy](https://github.com/Co
 
 Not covered by the above, and under their own terms:
 
-- **[Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif)** by Rodrigo Fuenzalida — SIL Open Font License 1.1.
+- **[Instrument Serif](https://fonts.google.com/specimen/Instrument+Serif)** by Rodrigo Fuenzalida — SIL Open Font License 1.1. Self-hosted in `fonts/`, which the OFL permits; the page makes no third-party requests.
 - **The record icon** (`favicon-*.png`, `apple-touch-icon.png`) is derived from a third-party stock illustration, not original work. `scripts/make-favicon.js` masks it to a real alpha channel — the source JPEG's "transparency" is a checkerboard painted into the pixels. Check the stock licence before relying on it.
 - **Album titles, artist names, and cover art** shown at runtime belong to their rights holders. They are fetched by the viewer's browser and are neither stored in nor distributed with this repository.

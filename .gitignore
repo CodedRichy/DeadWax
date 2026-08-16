@@ -17,3 +17,8 @@ deadwax-data.js
 
 # Tool caches.
 .impeccable/hook.cache.json
+
+# Internal strategy: pricing, competitor analysis, sizing. Kept on disk, never
+# published -- a public repo would hand these to anyone who clones it.
+docs/PRD.md
+docs/TRD.md

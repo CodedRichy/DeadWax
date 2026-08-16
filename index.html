@@ -885,7 +885,12 @@
   </div><!-- /#dbg -->
 
   <div class="g"><label>Camera tilt <b id="vTilt">58°</b></label>
-    <input type="range" id="sTilt" min="0" max="82" step="1" value="58"></div>
+    <!-- 58 was the prettier rake, but it foreshortened the disc into a thin
+         ellipse: the bands compressed together and the specular sweep ran
+         straight across the middle, competing with the diffuse haze that is the
+         only thing carrying the play counts. The record is a data object first.
+         36 opens the face enough to read the wear AND fills more of the frame. -->
+    <input type="range" id="sTilt" min="0" max="82" step="1" value="36"></div>
   <button id="bView">Reset view</button>
 
   <div class="g"><label>Volume <b id="vVol">100%</b></label>
@@ -1294,7 +1299,7 @@ void main(){
   float th = atan(p.y,p.x);
 
   // ---- which track band ------------------------------------------------
-  float phase=0., pitch=0., wear=0., loud=0., bandEdge=0.;
+  float phase=0., pitch=0., wear=0., loud=0., bandEdge=0., cueB=0.;
   bool music=false;
   if(r>=R_LOCK0 && r<=R_LEAD){
     if(r<R_LOCK1 || r>R_MUS1){
@@ -1310,6 +1315,15 @@ void main(){
           music = true;
           float d = min(r-uT0[i], uT1[i]-r);
           bandEdge = 1.-smoothstep(0.,.003,d);
+          // Cue burn. The only form of groove wear that the collector
+          // literature documents as VISIBLY localised -- ordinary forward play
+          // wear is described as "difficult if not impossible to detect".
+          // It lives where the stylus lands and gets rocked, i.e. the OUTER
+          // edge of a band, since a side plays outward-to-inward. Real cue
+          // burn is a DJ artefact; here it stands in for "a play starts here",
+          // which is what gives per-track wear a hard edge the eye can catch
+          // instead of a gradient it cannot.
+          cueB = 1.-smoothstep(0., .0090, uT1[i]-r);
           break;
         }
       }
@@ -1317,7 +1331,9 @@ void main(){
   }
   wear *= uWearMaster;
   float vel = mix(1.42,.72, smoothstep(R_LOCK1,R_MUS1,r));   // inner grooves wear first
-  float w = clamp(wear*vel, 0., 1.);
+  // Cue burn rides ON TOP of the band's own wear, so it only shows where the
+  // track was actually played. A never-played track has no landing mark.
+  float w = clamp(wear*vel*(1. + 1.15*cueB*smoothstep(.04,.30,wear)), 0., 1.);
 
   // ---- micro-relief ----------------------------------------------------
   float g=0., slope=0., lod=0.;
@@ -1395,7 +1411,15 @@ void main(){
   } else {
     // ------------------- grooves -------------------
     // wear widens the tangential smear: gloss loss, never grime
-    float rough = mix(.040, .165, w) * (1. + .30*(1.-lod));
+    // DELIBERATE EXAGGERATION, stated once here so nobody "corrects" it later.
+    // Real groove wear at realistic play counts is near-invisible -- collectors
+    // describe it as "clusters of miniature greyish lines" and warn that "even
+    // if you know what to look for it can still be tough to spot". Rendered
+    // honestly, a 341-play track and a 2-play track are the same black. That
+    // makes the product's one idea unreadable at the only moment it has to
+    // land. So the gloss-loss curve is pushed well past photographic realism.
+    // The DATA is true; the amplitude is a drawing decision.
+    float rough = mix(.038, .225, w) * (1. + .30*(1.-lod));
     vec3 e = anisoEnv(TO_W(R), TO_W(T), rough);
 
     // groove micro-relief — keep it visible, it is the whole texture
@@ -1419,7 +1443,7 @@ void main(){
     // a flat photograph of a record, and why this has to be a diffuse term
     // rather than another highlight. Squared so light play stays clean and the
     // curve opens up at the top.
-    col += env(TO_W(N)) * (w*w) * 0.62 * relief * bandLift;
+    col += env(TO_W(N)) * pow(w, 1.55) * 0.80 * relief * bandLift;
 
     // the light source itself — sharp anisotropic core, stays punchy when worn
     vec3 L = rotX(normalize(vec3(cos(uLightRot+2.1), sin(uLightRot+2.1), .78)), -uFlipRot);
@@ -1515,11 +1539,55 @@ const DEMO = {
 };
 const R_LOCK1=.4150, R_MUS1=.9450;
 
-// An empty record, for when the shelf is. NOT a demo -- it carries no invented
-// song titles, because a made-up tracklist on the platter is indistinguishable
-// from a real one that failed to load.
+// An empty record. It carries no invented song titles, because a made-up
+// tracklist on the platter is indistinguishable from a real one that failed to
+// load.
+//
+// That reasoning is why the cold start used to be blank, and it was right about
+// the risk -- but wrong about the cost. An unworn record is a demonstration of
+// nothing, and the visitor was being asked to fetch a Spotify export to see the
+// only idea the product has. DEMO_PRESSING resolves the ambiguity a different
+// way: it is titled "Deadwax · Test Pressing", so it announces itself as an
+// artifact of the app rather than posing as someone's library. BLANK is still
+// what you get when a record genuinely fails.
 const BLANK = { artist:'', album:'', art:null, blank:true,
                 tracks:[{ t:'', sec:1200, loud:.5, plays:0 }] };
+
+// ---- the demo pressing ----------------------------------------------------
+// A first-time visitor used to arrive at an unworn record. The whole claim is
+// that a record wears where you played it, and the object proving it was blank
+// -- so the one idea was invisible at the only moment it had to land. Both
+// routes out of that also billed the visitor: a Spotify export takes up to 30
+// days to arrive, and a single pasted link presses a one-track record with
+// nothing to be worn against.
+//
+// So the deck starts with a record already on it. Not a real album: DeadWax's
+// own first pressing, which is honest about being an artifact of the app and
+// raises no question about whose music it is. Fictional counts also let the wear
+// be DESIGNED -- 341 plays against 0 on the same disc is a spread real
+// listening rarely hands you, and it reads from across a room, which is the
+// entire pitch.
+//
+// _demo marks it so it is never saved and vanishes the moment a real record
+// presses. Silent, no dismiss button to explain.
+const DEMO_PRESSING = {
+  artist: 'Deadwax', album: 'Test Pressing', art: null, _demo: true,
+  tracks: [
+    { t:'Run-In',            sec:214, loud:.62, plays:341 },
+    { t:'Second Position',   sec:238, loud:.58, plays:96  },
+    { t:'Locked Groove',     sec:226, loud:.55, plays:38  },
+    { t:'Quiet Passage',     sec:252, loud:.44, plays:11  },
+    { t:'The Long Way Down', sec:266, loud:.60, plays:2   },
+    { t:'Never Played',      sec:244, loud:.52, plays:0   },
+  ],
+};
+function isDemo(r){ return !!(r && r._demo); }
+// Drop the demo as soon as there is something real to look at.
+function clearDemo(){
+  const i = SHELF.findIndex(isDemo);
+  if(i < 0) return;
+  SHELF.splice(i, 1);
+}
 
 // ---- the shelf lives in localStorage, built from the links you paste -------
 // Artwork is stored as a URL, never as base64. Inlining the images would put a
@@ -1540,8 +1608,11 @@ function saveShelf(){
     // _gen is a 640px canvas data URI regenerated from the name on load. It is
     // derived, it is enormous, and putting it in a 5MB quota is how the shelf
     // silently stops saving.
+    // The demo pressing is not the listener's record and must never be written:
+    // saved once, it would come back after they had real records and read as
+    // something they had pressed themselves.
     localStorage.setItem(STORE_KEY, JSON.stringify(
-      SHELF.map(r => ({ ...r, _gen: undefined }))));
+      SHELF.filter(r => !isDemo(r)).map(r => ({ ...r, _gen: undefined }))));
   }
   catch(e){ console.warn('shelf not saved:', e.message); }
 }
@@ -1570,6 +1641,9 @@ let SHELF = PUBLIC
   : ((window.DEADWAX && window.DEADWAX.shelf && window.DEADWAX.shelf.length)
       ? window.DEADWAX.shelf : [DEMO]);
 
+// Nothing saved yet: put the demo pressing on the platter rather than a blank
+// disc, so the idea is on screen before anyone is asked to do anything.
+if(!SHELF.length) SHELF.push(DEMO_PRESSING);
 let REC = loadLast() || SHELF[0] || BLANK;
 let SIDE = 0;                 // 0 = A, 1 = B
 let TRACKS = REC.tracks;
@@ -2065,8 +2139,9 @@ function ask({ title, body = '', fields = [], yes = 'Save', danger = false,
 // This is the same thing for the app: once the page is a URL other people
 // open, "which build am I looking at" stops being answerable from the render.
 // Newest first. Bump BUILD in the same commit as the change it names.
-const BUILD = '0.8';
+const BUILD = '0.9';
 const PRESSINGS = [
+  { v:'0.9', d:'2026-08-16', n:'The wear got <b>louder</b>. Read the research and the finding was uncomfortable: real groove wear from ordinary play is close to invisible &mdash; collectors call it &ldquo;tough to spot even if you know what to look for&rdquo;. Rendered honestly, a track played 341 times and one played twice are the same black. So the gloss-loss curve is now pushed past photographic realism on purpose. The counts are true; the amplitude is a drawing decision. Added <b>cue burn</b> at the head of every played band &mdash; the one kind of groove wear that really does show as a visible ring, and the hard edge the eye needs to tell two tracks apart. A <b>demo record</b> now sits on the deck at first load, so the thing the site is about is visible before you hand it anything.' },
   { v:'0.8', d:'2026-08-16', n:'A cleanup pressing. The <b>crate fills the frame</b> now instead of floating in it, and track names are set in the same serif as the album — the last generic type on the page. The needle readout stopped lying: it says <i>stylus up</i> or <i>paused</i> rather than printing a running time at a stopped deck. Space works the transport. The typeface is bundled, so the page asks nothing of anyone else.' },
   { v:'0.7', d:'2026-08-16', n:'Put the three bottom corners on <b>one line</b> &mdash; the title, the transport and the paste bar had been sitting at three different heights. Added <b>About</b>, a note on what this is and what it is meant to become. One transport now instead of two: the arm when there is an arm, Play when there is not. Your volume is remembered.' },
   { v:'0.6', d:'2026-08-16', n:'The shelf became a <b>crate</b> you riffle through. The flip is a real turn of the record rather than a camera swing, and side B finally holds its own songs.' },
@@ -2101,8 +2176,8 @@ const ABOUT = `
 
   <h4>The idea</h4>
   <p>Drag a diamond through a groove ten thousand times and the groove gives up.
-  The band goes milky while the rest of the disc stays mirror&#8209;black. You can
-  see someone's favourite track from across a room, on an object nobody designed
+  The band dulls while the rest of the disc stays mirror&#8209;black. A record is
+  the rare object that keeps a record of its own use, without anyone designing it
   to report anything.</p>
   <p>Streaming took that away. Your play counts exist &mdash; they are just sitting
   in a database, described to you as a number in a list at the end of the year.
@@ -2124,6 +2199,24 @@ const ABOUT = `
   specular and it only appears where the highlight happens to fall, and the wear
   stops being the point. That one line is the difference between a record and a
   screensaver.</p>
+
+  <h4>Where it lies, on purpose</h4>
+  <p>I went looking for photographs of a record where one track is visibly more
+  worn than its neighbours. There are none. Groove wear from ordinary play is
+  &mdash; in the words of people who grade records for a living &mdash;
+  <em>difficult if not impossible to detect visually</em>: clusters of tiny grey
+  lines, a surface that has lost a little of its gloss, <em>tough to spot even if
+  you know what to look for</em>. Rendered at true amplitude, a track played three
+  hundred times and a track played twice are the same black.</p>
+  <p>So the wear here is <b>drawn louder than it is</b>. The counts are real, taken
+  from your history and nowhere else; the amount of dulling they buy is a decision
+  I made, and it is well past what a camera would see. The ring at the head of each
+  played band is borrowed from <b>cue burn</b> &mdash; the one kind of groove wear
+  that really does show up as a visible mark, though on real records it comes from
+  DJs rocking the stylus back and forth, not from loving a song.</p>
+  <p>I would rather say that here than let you assume the disc is a photograph. It
+  is a portrait. Portraits are allowed to exaggerate; they are not allowed to
+  invent, and none of the numbers are invented.</p>
 
   <h4>What this page is not</h4>
   <p>This is the demo, not the product. What I actually set out to build is a
@@ -3939,6 +4032,9 @@ const NOW = (() => {
     const keep = ranked.slice(0, MAX_RECORDS);
     const dropped = ranked.length - keep.length;
 
+    // Real history landing means the demo has served its purpose.
+    if(keep.length) clearDemo();
+
     let added = 0, merged = 0;
     for(const a of keep){
       const tracks = [...a.tracks.values()]
@@ -4194,26 +4290,194 @@ const NOW = (() => {
   // back as an empty rectangle. Redraw once it does.
   setTimeout(() => { if(SHELF.length && typeof renderShelf === 'function') renderShelf(); }, 0);
 
-  const genSleeve = window.genSleeve = function(artist, album){
+  // ---- generated sleeves -------------------------------------------------
+  //
+  // The old one stacked four defaults -- a two-stop diagonal gradient, a thin
+  // inset rectangle, centred mono type, and a hue hashed across all 360 -- and
+  // read as exactly what it was: a missing-image placeholder. Real sleeves are
+  // almost never centred symmetric type on a gradient.
+  //
+  // The premise here is different. Do not imitate album art; imitate a pressing
+  // plant's typographic sleeve. Generated abstract art always looks generated.
+  // Generated TYPOGRAPHY can look intentional -- and it is honest, because this
+  // record really was pressed by DeadWax out of play counts rather than designed
+  // by an art director. Blue Note, Factory, ECM: type, rules, one ink.
+  //
+  // Four archetypes rather than one template. With four sleeves visible in the
+  // crate at once, a repeated template is what makes a set look machine-made;
+  // four layouts on a shared palette read as a label with a house style.
+
+  // Inks sampled from real sleeve stock, not generated. A curated set of eight
+  // is why these stopped looking muddy -- hashing across 360 hues at a fixed
+  // saturation lands most records in the same dead mid-tones.
+  const SLEEVE_INKS = [
+    { g:'#2A1216', i:'#E9E2D3', a:'#B8763F' },   // oxblood
+    { g:'#0F1417', i:'#E4E9E6', a:'#2E7D6B' },   // teal black
+    { g:'#E8E2D4', i:'#1A1714', a:'#8C2F26' },   // bone, dark ink
+    { g:'#161A2C', i:'#DCE0EE', a:'#C9A227' },   // ultramarine
+    { g:'#20211C', i:'#E6E4D9', a:'#7D8C4A' },   // olive
+    { g:'#2C1B2E', i:'#E7DCE8', a:'#C2557A' },   // aubergine
+    { g:'#1B1B1B', i:'#F0EDE6', a:'#D9531E' },   // carbon, orange
+    { g:'#E6DFD2', i:'#22201C', a:'#2B4C7E' },   // bone, blue
+  ];
+
+  const genSleeve = window.genSleeve = function(artist, album, catNo){
     const S = 640, c = document.createElement('canvas');
     c.width = c.height = S;
     const x = c.getContext('2d');
-    let h = 0;
-    for(let i=0;i<artist.length;i++) h = (h*31 + artist.charCodeAt(i)) >>> 0;
-    const hue = h % 360;
-    const g = x.createLinearGradient(0,0,S,S);
-    g.addColorStop(0, `hsl(${hue} 34% 26%)`);
-    g.addColorStop(1, `hsl(${(hue+38)%360} 30% 9%)`);
-    x.fillStyle = g; x.fillRect(0,0,S,S);
-    x.strokeStyle = `hsl(${hue} 28% 52%)`; x.lineWidth = 2;
-    x.strokeRect(38,38,S-76,S-76);
-    x.fillStyle = 'rgba(240,236,226,.94)';
-    x.textAlign = 'center';
-    x.font = '600 34px ui-monospace, Consolas, monospace';
-    x.fillText(artist.slice(0,22).toUpperCase(), S/2, S/2 - 12);
-    x.font = '400 22px ui-monospace, Consolas, monospace';
-    x.fillStyle = 'rgba(240,236,226,.62)';
-    x.fillText(album.slice(0,26), S/2, S/2 + 28);
+
+    // Two independent hashes: the artist picks the ink so a label's records
+    // share a palette, the album picks the layout so they are not identical.
+    const hash = s => { let h = 2166136261;
+      for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return h >>> 0; };
+    const hA = hash(artist || 'unknown'), hB = hash(album || 'untitled');
+    const P = SLEEVE_INKS[hA % SLEEVE_INKS.length];
+    const form = hB % 4;
+    const light = P.g === '#E8E2D4' || P.g === '#E6DFD2';
+
+    // Instrument Serif is self-hosted, but canvas silently falls back to the
+    // next family if it has not parsed yet -- so ask before using it.
+    const serifReady = document.fonts && document.fonts.check('400 64px "Instrument Serif"');
+    const SERIF = serifReady ? '"Instrument Serif", Georgia, serif' : 'Georgia, serif';
+    const MONO  = 'ui-monospace, "Cascadia Mono", Consolas, monospace';
+
+    x.fillStyle = P.g; x.fillRect(0,0,S,S);
+
+    // Fit a string to a width by stepping the size down, so a long artist name
+    // cannot run off the sleeve. Returns the size it settled on.
+    const fitted = (t, family, weight, max, min, width) => {
+      let s = max;
+      while(s > min){ x.font = `${weight} ${s}px ${family}`;
+        if(x.measureText(t).width <= width) break; s -= 2; }
+      x.font = `${weight} ${s}px ${family}`;
+      return s;
+    };
+    const caps = t => String(t||'').toUpperCase();
+    const trk = (t, px) => { // letter-spaced draw; canvas has no letterSpacing everywhere
+      let w = 0; for(const ch of t) w += x.measureText(ch).width + px;
+      return w - px;
+    };
+    const drawTracked = (t, X, Y, px) => {
+      let cx = X;
+      for(const ch of t){ x.fillText(ch, cx, Y); cx += x.measureText(ch).width + px; }
+    };
+
+    const M = 54;                                   // margin, generous on purpose
+    const cat = catNo || ('DWX·' + String(hB % 900 + 100));
+
+    if(form === 0){
+      // BLUE NOTE -- artist large and flush left at the top, album beneath in
+      // small caps, one heavy accent bar anchoring the bottom right.
+      const size = fitted(caps(artist).slice(0,18), MONO, '700', 62, 26, S - M*2);
+      x.fillStyle = P.i;
+      x.textAlign = 'left';
+      x.fillText(caps(artist).slice(0,18), M, M + size*0.86);
+      x.font = `400 20px ${MONO}`;
+      x.fillStyle = P.a;
+      drawTracked(caps(album).slice(0,26), M, M + size*0.86 + 34, 2.4);
+      x.fillStyle = P.a;
+      x.fillRect(S - M - 208, S - M - 74, 208, 74);
+      x.fillStyle = light ? '#E8E2D4' : P.g;
+      x.font = `700 15px ${MONO}`;
+      drawTracked(cat, S - M - 190, S - M - 44, 2);
+      x.font = `400 12px ${MONO}`;
+      drawTracked('33⅓ RPM', S - M - 190, S - M - 22, 2);
+
+    } else if(form === 1){
+      // ECM -- almost nothing. One hairline a third of the way down, type in the
+      // bottom-left corner only, the rest is air.
+      x.strokeStyle = P.a; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(M, S*0.34); x.lineTo(S - M, S*0.34); x.stroke();
+      x.textAlign = 'left';
+      const size = fitted(album.slice(0,24), SERIF, '400', 56, 24, S - M*2);
+      x.fillStyle = P.i;
+      x.fillText(album.slice(0,24), M, S - M - 52);
+      x.font = `400 13px ${MONO}`;
+      x.fillStyle = P.a;
+      drawTracked(caps(artist).slice(0,28), M, S - M - 18, 3);
+      x.fillStyle = P.i; x.globalAlpha = .40;
+      x.font = `400 11px ${MONO}`;
+      x.textAlign = 'right';
+      x.fillText(cat, S - M, S*0.34 - 14);
+      x.globalAlpha = 1;
+
+    } else if(form === 2){
+      // FACTORY -- the album is the whole cover, set enormous and cropped by the
+      // edge; the artist runs up the left margin at 90 degrees. A single disc of
+      // accent sits off-centre behind it.
+      x.fillStyle = P.a; x.globalAlpha = .92;
+      x.beginPath(); x.arc(S*0.68, S*0.36, S*0.20, 0, Math.PI*2); x.fill();
+      x.globalAlpha = 1;
+      x.textAlign = 'left';
+      const words = caps(album).split(/\s+/).slice(0,3);
+      let y = S*0.60;
+      for(const w of words.slice(0,3)){
+        const size = fitted(w.slice(0,12), MONO, '700', 78, 30, S - M - 30);
+        x.fillStyle = P.i;
+        x.fillText(w.slice(0,12), M, y);
+        y += size*0.92;
+        if(y > S - M) break;
+      }
+      x.save();
+      x.translate(M - 22, S - M);
+      x.rotate(-Math.PI/2);
+      x.font = `400 13px ${MONO}`;
+      x.fillStyle = P.a;
+      drawTracked(caps(artist).slice(0,30), 0, 0, 3);
+      x.restore();
+
+    } else {
+      // SWISS -- a hard rule across the top, artist set in two lines against it,
+      // and a column of pressing metadata down the right. Everything on a grid.
+      x.fillStyle = P.a; x.fillRect(M, M, S - M*2, 10);
+      x.textAlign = 'left';
+      const parts = caps(artist).split(/\s+/);
+      const l1 = parts.slice(0, Math.ceil(parts.length/2)).join(' ').slice(0,14);
+      const l2 = parts.slice(Math.ceil(parts.length/2)).join(' ').slice(0,14);
+      let y = M + 96;
+      for(const line of [l1, l2]){
+        if(!line) continue;
+        const size = fitted(line, SERIF, '400', 74, 28, S - M*2 - 120);
+        x.fillStyle = P.i;
+        x.fillText(line, M, y);
+        y += size*0.90;
+      }
+      x.font = `400 15px ${MONO}`;
+      x.fillStyle = P.a;
+      drawTracked(caps(album).slice(0,24), M, S - M - 20, 2.4);
+      // metadata column, right edge, reading down
+      x.save();
+      x.translate(S - M + 4, M + 26);
+      x.rotate(Math.PI/2);
+      x.font = `400 11px ${MONO}`;
+      x.fillStyle = P.i; x.globalAlpha = .55;
+      drawTracked(cat + '  ·  33⅓ RPM  ·  DEADWAX PRESSING', 0, 0, 2.2);
+      x.restore();
+      x.globalAlpha = 1;
+    }
+
+    // Print misregistration: one channel shoved a pixel. Cheap, and it is the
+    // difference between "rendered" and "printed" more than any texture is.
+    x.globalCompositeOperation = 'screen';
+    x.globalAlpha = .06;
+    x.fillStyle = P.a;
+    x.fillRect(1, 0, S, S);
+    x.globalCompositeOperation = 'source-over';
+    x.globalAlpha = 1;
+
+    // Paper tooth. Sparse deliberately -- dense noise reads as video grain, and
+    // the crate shows these at 460px where heavy grain turns to mush.
+    const img = x.getImageData(0,0,S,S), d = img.data;
+    let seed = hA;
+    const rnd = () => (seed = (seed*1664525 + 1013904223) >>> 0) / 4294967296;
+    for(let i=0;i<d.length;i+=4){
+      if(rnd() > .34) continue;
+      const n = (rnd()-.5) * 17;
+      d[i] += n; d[i+1] += n; d[i+2] += n;
+    }
+    x.putImageData(img, 0, 0);
+
     return c.toDataURL('image/png');
   };
 
@@ -4257,6 +4521,8 @@ const NOW = (() => {
   // seeded at 0 plays you get the actual object -- one bright band cut through
   // nine mint ones.
   function shelve(artist, album, art, track, sec, vid, full){
+    // There is something real to look at now, so the demo has done its job.
+    clearDemo();
     let rec = SHELF.find(r => key(r.album) === key(album) && key(r.artist) === key(artist));
     if(!rec){
       rec = { artist, album, art, tracks: [] };

@@ -27,6 +27,16 @@ const check = (name, pass, detail) => {
   await page.waitForTimeout(2300);
 
   // ---- empty state ------------------------------------------------------
+  // Cold load is no longer empty -- the deck starts with DEMO_PRESSING on it, so
+  // that a first-time visitor sees worn grooves instead of being asked to fetch
+  // a Spotify export to find out what the product does. The empty state is still
+  // reachable (delete every record), so drive it explicitly rather than assuming
+  // it is what the page boots into.
+  await page.evaluate(() => { SHELF.length = 0; renderShelf(); selectRecord(BLANK, 0); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => document.querySelectorAll('*')
+    .forEach(e => e.getAnimations().forEach(a => a.finish())));
+
   const emptyVis = await page.evaluate(() => {
     const e = document.getElementById('empty');
     const r = e.getBoundingClientRect();

@@ -4,3 +4,11 @@ node_modules/
 
 # Playwright capture output — regenerate with `node shot.js` / `node orbit.js`
 *.png
+
+# Your own listening history + embedded album art. Never publish:
+# GitHub Pages serves the branch tree publicly.
+deadwax-data.js
+
+# Scratch: agent walkthrough artifacts and staging for deletion.
+_uxwalk/
+_to_delete/

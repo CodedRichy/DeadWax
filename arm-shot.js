@@ -2,7 +2,7 @@
 // judged. The full-frame shot is too small to see whether the arm is a solid.
 const { chromium } = require('playwright');
 const path = require('path');
-const FILE = 'file:///' + path.resolve(__dirname, 'deadwax-platter.html').replace(/\\/g, '/');
+const FILE = 'file:///' + path.resolve(__dirname, 'index.html').replace(/\\/g, '/');
 
 (async () => {
   const browser = await chromium.launch({

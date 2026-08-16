@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 const path = require('path');
-const FILE = 'file:///' + path.resolve(__dirname, 'deadwax-platter.html').replace(/\\/g, '/');
+const FILE = 'file:///' + path.resolve(__dirname, 'index.html').replace(/\\/g, '/');
 
 (async () => {
   const b = await chromium.launch({

@@ -99,7 +99,7 @@ http.createServer(async (req, res) => {
   }
 
   let p = decodeURIComponent(url.pathname);
-  if (p === '/') p = '/deadwax-platter.html';
+  if (p === '/') p = '/index.html';
   const file = path.join(ROOT, p);
   // no traversal, and .env is never servable even by exact path
   if (!file.startsWith(ROOT + path.sep) || path.basename(file) === '.env') {

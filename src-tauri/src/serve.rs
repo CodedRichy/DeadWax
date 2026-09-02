@@ -47,10 +47,10 @@ pub struct Live {
 pub struct State {
     pub root: PathBuf,
     pub shelf: Mutex<Vec<Record>>,
+    /// Every album the log knows, floor or no floor. The shelf is the earned
+    /// subset; this is what lets the deck show a record being cut.
+    pub pending: Mutex<Vec<Record>>,
     pub live: Mutex<Live>,
-    /// Bumped whenever a new cover is stored. Lets a sleeve captured mid-session
-    /// show up without restarting the app.
-    pub art_gen: Mutex<u64>,
 }
 
 fn json_escape(s: &str) -> String {
@@ -213,15 +213,85 @@ fn index_page(state: &State) -> Vec<u8> {
 
 fn now_json(state: &State) -> Vec<u8> {
     let live = state.live.lock().unwrap();
+    // The cover travels with the live track, not just with the shelf.
+    //
+    // The shelf is injected once, when the page loads, so a cover captured
+    // while the app is already running could not reach it -- and an UNPRESSED
+    // track has no shelf entry to carry one at all. Since most of what gets
+    // played has no pressing yet, that meant the record actually on the platter
+    // was the one record guaranteed to be blank.
+    let art = if live.artist.is_empty() || live.album.is_empty() {
+        "null".to_string()
+    } else {
+        match crate::art::find(&state.root, &crate::art::key(&live.artist, &live.album)) {
+            Some(p) => format!(
+                r#""/art/{}""#,
+                p.file_name().and_then(|n| n.to_str()).unwrap_or("")
+            ),
+            None => "null".to_string(),
+        }
+    };
+    // The album this track belongs to, as far as the log knows -- every track of
+    // it heard so far, with its play counts, even well below the pressing floor.
+    // Without this the deck could only put the ONE playing track on a blank
+    // disc, so listening to an album straight through read as a run of unrelated
+    // one-track records instead of a single record gaining grooves.
+    let pending = {
+        let all = state.pending.lock().unwrap();
+        let want = crate::art::key(&live.artist, &live.album);
+        match all
+            .iter()
+            .find(|r| !want.is_empty() && crate::art::key(&r.artist, &r.album) == want)
+        {
+            Some(r) => {
+                let tracks: Vec<String> = r
+                    .tracks
+                    .iter()
+                    .map(|t| {
+                        format!(
+                            r#"{{"t":"{}","sec":{:.0},"plays":{},"loud":{:.4}}}"#,
+                            json_escape(&t.title),
+                            t.secs,
+                            t.plays,
+                            placeholder_loudness(&t.title)
+                        )
+                    })
+                    .collect();
+                format!(
+                    r#"{{"album":"{}","heard":{},"floor":{},"plays":{},"tracks":[{}]}}"#,
+                    json_escape(&r.album),
+                    r.heard,
+                    crate::press::TEST_PRESSING_FLOOR,
+                    r.plays,
+                    tracks.join(",")
+                )
+            }
+            None => "null".to_string(),
+        }
+    };
+
+    // A cheap stamp of the shelf's contents. The page holds the shelf it was
+    // given when it loaded, so a record that crossed the five-track floor while
+    // the app was running never appeared in the crate until a restart. When this
+    // changes the page refetches. Count plus total plays moves on both a new
+    // record and a new play of an existing one.
+    let stamp = {
+        let sh = state.shelf.lock().unwrap();
+        format!("{}:{}", sh.len(), sh.iter().map(|r| r.plays as u64).sum::<u64>())
+    };
+
     format!(
-        r#"{{"playing":{},"artist":"{}","track":"{}","album":"{}","position":{:.3},"duration":{:.3},"sampledMs":{}}}"#,
+        r#"{{"playing":{},"artist":"{}","track":"{}","album":"{}","position":{:.3},"duration":{:.3},"sampledMs":{},"art":{},"pending":{},"shelfStamp":"{}"}}"#,
         live.playing,
         json_escape(&live.artist),
         json_escape(&live.track),
         json_escape(&live.album),
         live.position,
         live.duration,
-        live.sampled_ms
+        live.sampled_ms,
+        art,
+        pending,
+        stamp
     )
     .into_bytes()
 }
@@ -326,6 +396,14 @@ fn handle(mut stream: TcpStream, state: &State) {
                 (true, Ok(bytes)) => respond(&mut stream, "200 OK", content_type(&file), &bytes),
                 _ => respond(&mut stream, "404 Not Found", "text/plain", b"not found"),
             }
+        }
+        // The shelf on its own, so the page can pick up records pressed while it
+        // has been open rather than only the ones that existed at load.
+        "/api/shelf" => {
+            let sh = state.shelf.lock().unwrap();
+            let body = shelf_json(&state.root, &sh).into_bytes();
+            drop(sh);
+            respond(&mut stream, "200 OK", "application/json; charset=utf-8", &body);
         }
         "/api/now" => {
             let body = now_json(state);

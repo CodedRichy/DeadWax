@@ -167,6 +167,7 @@ pub fn start(verbose: bool) -> Result<(Arc<State>, u16), Box<dyn std::error::Err
 
     let counted = store.counted_listens()?;
     let records = shelf(&counted);
+    let in_progress = crate::press::all_records(&counted);
     if verbose {
         println!(
             "{} listens in the log, {} counted, {} records on the shelf",
@@ -179,8 +180,8 @@ pub fn start(verbose: bool) -> Result<(Arc<State>, u16), Box<dyn std::error::Err
     let state = Arc::new(State {
         root,
         shelf: Mutex::new(records),
+        pending: Mutex::new(in_progress),
         live: Mutex::new(Live::default()),
-        art_gen: Mutex::new(0),
     });
     let port = serve::spawn(Arc::clone(&state), 8484)?;
     Ok((state, port))
@@ -271,9 +272,8 @@ pub fn live_loop(state: Arc<State>) {
                 {
                     tried.insert(k.clone());
                     if let Some(bytes) = cap.thumbnail(&n.title) {
-                        match crate::art::save(&state.root, &k, &bytes) {
-                            Ok(_) => *state.art_gen.lock().unwrap() += 1,
-                            Err(e) => eprintln!("could not store cover for {k}: {e}"),
+                        if let Err(e) = crate::art::save(&state.root, &k, &bytes) {
+                            eprintln!("could not store cover for {k}: {e}");
                         }
                     }
                 }
@@ -381,6 +381,7 @@ fn reshelf(store: &Store, state: &State, verbose: bool) {
             println!("  shelf: {} records", fresh.len());
         }
         *state.shelf.lock().unwrap() = fresh;
+        *state.pending.lock().unwrap() = crate::press::all_records(&counted);
     }
 }
 

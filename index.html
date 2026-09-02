@@ -1795,7 +1795,13 @@ function layout(rec, side){
   // record", which was left over from the baked shelf and is simply untrue here.
   {
     const heard = rec.tracks.filter(t => t.plays > 0).length;
-    el('npCov').textContent = rec.len
+    // An unpressed record is not "2/2 tracks heard" -- that reads as complete.
+    // It is a record being cut, and what matters is how far off a pressing it
+    // is. Saying so is also the only place the five-track floor is ever
+    // explained to anyone.
+    el('npCov').textContent = rec.pending
+      ? `${rec.pending.heard} of ${rec.pending.floor} tracks · not pressed yet`
+      : rec.len
       ? `${rec.heard}/${rec.len} tracks heard`
       : `${heard}/${rec.tracks.length} track${rec.tracks.length===1?'':'s'} heard`;
   }
@@ -3870,7 +3876,31 @@ const NOW = (() => {
   // roomDrove: did WE start the platter, or did the user? Only what the room
   // started may the room stop -- otherwise a record put on by hand with no audio
   // behind it gets halted every 3 seconds by a silent SMTC session.
-  let lastKey = null, failed = 0, roomDrove = false;
+  let lastKey = null, failed = 0, roomDrove = false, shelfStamp = null;
+
+  // Pull the shelf again when the server says it changed.
+  //
+  // The page is handed a shelf once, at load. So a record that crossed the
+  // five-track floor while the app was open -- which is the ONE moment the
+  // whole product is about -- did not show up in the crate until a restart.
+  // SHELF is mutated in place rather than reassigned: the crate, the demo
+  // handling and the current record all hold references to that same array.
+  async function refreshShelf(){
+    try{
+      const r = await fetch('/api/shelf', { cache:'no-store' });
+      const d = await r.json();
+      if(!d || !Array.isArray(d.shelf)) return;
+      const wasDemo = SHELF.some(isDemo);
+      SHELF.length = 0;
+      for(const rec of d.shelf) SHELF.push(rec);
+      if(wasDemo && !SHELF.length) SHELF.push(DEMO_PRESSING);
+      document.body.classList.toggle('noshelf', !SHELF.length);
+      renderShelf();
+      // The record on the deck is now a stale object from the old array. Let
+      // the next tick re-resolve it against the new one.
+      lastKey = null;
+    }catch(e){ REPORT('shelf refresh: ' + e); }
+  }
 
   // Album first, because that is what a record IS. Falling back to matching on
   // artist alone would drop a random record from the right artist on the
@@ -3895,17 +3925,47 @@ const NOW = (() => {
   // label, one unbroken side, and no wear anywhere -- because none has been
   // earned yet. It carries `blank`, which is what stops selectRecord() saving it
   // as your last record; it is a thing being played, not a thing you own.
+  function lacquerTracks(np){
+    const here = norm(np.track);
+    const rows = (np.pending && np.pending.tracks || []).map(t => ({
+      t: t.t, sec: +t.sec || 0, loud: +t.loud || .5, plays: +t.plays || 0,
+    }));
+    // The track playing right now is not in the log until it ends, so a first
+    // listen would otherwise show a record without the song on it.
+    if(!rows.some(r => norm(r.t) === here)){
+      rows.push({ t: np.track, sec: +np.duration || 0, loud: .5, plays: 0 });
+    }
+    // A band with no length cannot be laid out; fall back per track rather than
+    // dropping it, so the tracklist stays complete.
+    for(const r of rows) if(!(r.sec > 0)) r.sec = +np.duration || 240;
+    return rows;
+  }
+
   function lacquer(np){
     selectRecord({ ...BLANK,
       artist: np.artist,
       // Singles come through with no album. The track is the record then.
       album:  np.album || np.track,
       unpressed: true,
-      // The band takes the track's REAL length. It used to be a flat 1200s --
-      // a whole blank side -- which meant the stylus readout counted against
-      // twenty minutes no matter what was on, and the needle crossed the band
-      // at a rate that had nothing to do with the song.
-      tracks: [{ t: np.track, sec: +np.duration || 1200, loud: .5, plays: 0 }],
+      // How close this album is to earning a pressing, for the cold-start line.
+      pending: np.pending || null,
+      // Every track of this album heard so far -- not just the one playing.
+      //
+      // A one-track lacquer meant playing an album straight through produced a
+      // run of unrelated single-track discs, each replacing the last, when what
+      // is actually happening is ONE record gaining grooves. The server sends
+      // the album as the log knows it; the track playing now is added if it has
+      // not been counted yet, so it appears the moment it starts rather than
+      // when it finishes.
+      //
+      // Bands take real lengths. This used to be a flat 1200s -- a whole blank
+      // side -- so the readout counted against twenty minutes no matter what
+      // was on, and the needle crossed at a rate unrelated to the song.
+      tracks: lacquerTracks(np),
+      // The cover Windows is holding for this track, if it has been captured.
+      // An unpressed record has no shelf entry, so this is the only route a
+      // sleeve has onto the disc you are actually looking at.
+      art: np.art || null,
     }, 0);
   }
 
@@ -3979,8 +4039,26 @@ const NOW = (() => {
         return;
       }
 
+      if(np.shelfStamp && np.shelfStamp !== shelfStamp){
+        const first = shelfStamp === null;
+        shelfStamp = np.shelfStamp;
+        // Not on the very first message -- that shelf is the one already
+        // injected into the page, and refetching it would repaint for nothing.
+        if(!first){ refreshShelf(); return; }
+      }
+
       const key = np.artist + ' ' + np.track;
       const rec = findRecord(np);
+
+      // A cover captured DURING this session cannot reach the shelf, which was
+      // injected when the page loaded. When one turns up for the record on the
+      // deck, take it and repaint -- otherwise the sleeve stays blank until the
+      // app is restarted, which is what made the artwork look like it was not
+      // working at all.
+      if(rec && !rec.art && np.art){
+        rec.art = np.art;
+        if(rec === REC){ selectRecord(rec, SIDE); return; }
+      }
       if(key !== lastKey){
         lastKey = key;
         if(rec) cueTo(rec, np.track); else lacquer(np);

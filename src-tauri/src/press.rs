@@ -327,7 +327,15 @@ pub struct Track {
 }
 
 /// Derive the shelf from counted listens.
-pub fn shelf(listens: &[Listen]) -> Vec<Record> {
+/// Every album the log knows about, INCLUDING the ones too sparse to press.
+///
+/// `shelf` is this with the test-pressing floor applied. They are split because
+/// an album with three tracks heard is not nothing -- it is a record being cut,
+/// and the app has to be able to show it filling up. Without this the deck could
+/// only ever put a single track on an otherwise blank disc, so playing an album
+/// straight through looked like a series of unrelated one-track records rather
+/// than one record gaining grooves.
+pub fn all_records(listens: &[Listen]) -> Vec<Record> {
     struct Group {
         artist: String,
         album: String,
@@ -379,7 +387,6 @@ pub fn shelf(listens: &[Listen]) -> Vec<Record> {
 
     let mut out: Vec<Record> = groups
         .into_values()
-        .filter(|g| g.seen_titles.len() >= TEST_PRESSING_FLOOR)
         .map(|g| {
             let tracks: Vec<Track> = g
                 .order
@@ -404,6 +411,14 @@ pub fn shelf(listens: &[Listen]) -> Vec<Record> {
     // Most played first -- the shelf leads with what was actually listened to.
     out.sort_by(|a, b| b.plays.cmp(&a.plays).then(a.album.cmp(&b.album)));
     out
+}
+
+/// The records that have actually been earned: `all_records` past the floor.
+pub fn shelf(listens: &[Listen]) -> Vec<Record> {
+    all_records(listens)
+        .into_iter()
+        .filter(|r| r.heard >= TEST_PRESSING_FLOOR)
+        .collect()
 }
 
 /// How close the nearest unpressed album is to cutting its first test pressing.

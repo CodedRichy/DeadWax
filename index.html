@@ -777,6 +777,12 @@
   /* Nothing playing: collapse it, or its margin holds an 11px gap under the last
      visible line and the title block stops meeting the baseline. */
   #stylusInfo:empty{display:none}
+  /* ...but NOT when it is carrying a track. paint() sets data-np, which is an
+     attribute and adds no child nodes, so :empty still matched and the element
+     stayed hidden -- taking its ::after, the only line in the product that says
+     what is playing right now, down with it. The app knew; the CSS swallowed
+     it. Specificity puts this after the :empty rule on purpose. */
+  #stylusInfo[data-np]:not([data-np=""]){display:block}
   #stylusInfo b{color:var(--accent);font-weight:400}
 
   @media (prefers-reduced-motion:reduce){
@@ -3710,7 +3716,12 @@ function frame(now){
   // When a YouTube video is driving the deck the arm is positioned from the
   // player's clock instead, so the free-running creep has to stand down or the
   // two fight each other and the needle drifts off the track it is playing.
-  if(playing && !lifting && !armDrag && !(window.YT_SYNC && window.YT_SYNC())){
+  // Either clock may be driving the arm: a YouTube record's player, or SMTC for
+  // everything else. Whichever answers first wins; the free-running creep below
+  // is the fallback for a record with no clock at all.
+  if(playing && !lifting && !armDrag
+     && !(window.YT_SYNC && window.YT_SYNC())
+     && !(window.NP_SYNC && window.NP_SYNC())){
     armR -= dt*(R_OUT-R_IN)/1200 * (omega/TARGET);
     if(armR<=R_IN){ armR=R_IN; setPlaying(false); }
     updateStylusInfo();
@@ -3827,6 +3838,23 @@ requestAnimationFrame(frame);
 // Last.fm has no push side. getRecentTracks marks the head track nowplaying
 // while it is in progress, so polling is the only option; 15s is well inside
 // the rate limit and finer than a track boundary matters.
+// Errors in this page had nowhere to go: no console is readable from inside the
+// app window, and the poller below disables itself after five exceptions -- so
+// one throw made a whole feature look unimplemented. Everything uncaught now
+// goes to the server, which appends it to src-tauri/webview.log.
+const REPORT = (() => {
+  if(PUBLIC || location.protocol === 'file:') return () => {};
+  let sent = 0;
+  const send = m => {
+    if(sent++ > 60) return;                       // never become the problem
+    try{ fetch('/api/log?m=' + encodeURIComponent(String(m)), {cache:'no-store'}); }catch(e){}
+  };
+  addEventListener('error', e =>
+    send(`uncaught: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`));
+  addEventListener('unhandledrejection', e => send(`unhandled rejection: ${e.reason}`));
+  return send;
+})();
+
 const NOW = (() => {
   // The public build has no server and no Last.fm key, so there is nothing to
   // poll. Leaving this running would retry /api/now against a host that will
@@ -3839,7 +3867,10 @@ const NOW = (() => {
     .replace(/\s*[\(\[](deluxe|remaster(ed)?|anniversary|special|expanded|explicit|bonus[^)\]]*|standard)[^)\]]*[\)\]]/g,'')
     .replace(/[^a-z0-9]+/g,' ').trim();
 
-  let lastKey = null, failed = 0;
+  // roomDrove: did WE start the platter, or did the user? Only what the room
+  // started may the room stop -- otherwise a record put on by hand with no audio
+  // behind it gets halted every 3 seconds by a silent SMTC session.
+  let lastKey = null, failed = 0, roomDrove = false;
 
   // Album first, because that is what a record IS. Falling back to matching on
   // artist alone would drop a random record from the right artist on the
@@ -3850,6 +3881,32 @@ const NOW = (() => {
     // no album in the scrobble (common for singles) -- find the pressing that
     // actually contains the track, not just anything by the artist
     return SHELF.find(r => norm(r.artist)===a && r.tracks.some(x => norm(x.t)===t)) || null;
+  }
+
+  // What goes on the platter when the room is playing something you have not
+  // earned a pressing for -- which is MOST of what you play, since a record
+  // needs five distinct tracks before it exists at all.
+  //
+  // Before this, the deck just kept showing whatever record was selected last.
+  // So you would put on Shakira and go on staring at a PARTYNEXTDOOR record,
+  // which reads as the app being broken rather than as the record being unmade.
+  //
+  // What goes on instead is an UNCUT LACQUER: the right artist and album on the
+  // label, one unbroken side, and no wear anywhere -- because none has been
+  // earned yet. It carries `blank`, which is what stops selectRecord() saving it
+  // as your last record; it is a thing being played, not a thing you own.
+  function lacquer(np){
+    selectRecord({ ...BLANK,
+      artist: np.artist,
+      // Singles come through with no album. The track is the record then.
+      album:  np.album || np.track,
+      unpressed: true,
+      // The band takes the track's REAL length. It used to be a flat 1200s --
+      // a whole blank side -- which meant the stylus readout counted against
+      // twenty minutes no matter what was on, and the needle crossed the band
+      // at a rate that had nothing to do with the song.
+      tracks: [{ t: np.track, sec: +np.duration || 1200, loud: .5, plays: 0 }],
+    }, 0);
   }
 
   // Put the needle where the track is, rather than restarting the side. The
@@ -3867,37 +3924,148 @@ const NOW = (() => {
     return false;
   }
 
-  function paint(np, err){
+  // `matched` is the whole point. ON NOW sits on the platter record's own line,
+  // so it can only mean "THIS record is what you are hearing". Lighting it from
+  // np.playing alone lit it whenever anything at all was playing -- so the deck
+  // announced that a PARTYNEXTDOOR record was on now while the room was playing
+  // Sean Paul. A readout that reports someone else's state is worse than none.
+  // ---- the clock ----------------------------------------------------------
+  // The deck used to have no idea WHERE in a track you were. The arm simply
+  // crept inward on a timer of its own (see the free-run in the frame loop), so
+  // pausing left it walking on, and seeking did nothing at all. YouTube records
+  // never had this problem because the player handed the page a real clock --
+  // window.YT_SYNC. This is the same contract for everything else: SMTC's
+  // position, pushed over /api/stream.
+  //
+  // SMTC's position is a SNAPSHOT, not a running clock -- it only moves when
+  // Windows updates it. So each sample is stamped and the time since is added
+  // on while playing. Every push re-anchors it, so drift cannot accumulate.
+  let clock = null;                    // {pos, dur, at, playing, matched}
+
+  window.NP_SYNC = function(){
+    if(!clock || !clock.matched || !(clock.dur > 0)) return false;
+    // Find the band by TITLE rather than by a remembered index. The YouTube
+    // module keeps its own `bandIdx`, but that is block-scoped to it, and a
+    // remembered index goes stale the moment the record is flipped or changed.
+    // Derived, like YT_SYNC's own belongs-to-this-groove check.
+    const b = bands.find(x => norm(x.t) === clock.key);
+    if(!b) return false;
+    const t = clock.pos + (clock.playing ? (performance.now() - clock.at)/1000 : 0);
+    const p = Math.max(0, Math.min(1, t/clock.dur));
+    armR = b.r1 - (b.r1 - b.r0)*p;
+    updateStylusInfo();
+    return true;
+  };
+
+  function paint(np, err, matched){
     const cov = el('npCov');
     if(err){ cov.dataset.live = ''; return; }
     // The live state is one word in a line that already exists. A badge would
     // be the only lit chrome on screen, which is not what this UI is.
-    cov.dataset.live = np && np.playing ? '1' : '';
+    cov.dataset.live = np && np.playing && matched ? '1' : '';
+  }
+
+  function apply(np){
+      if(np.error){ paint(null, np.error); return; }
+
+      if(!np.playing){
+        paint(np, null, false);
+        // Pause is now a real event, not a guess. The clock is kept -- a paused
+        // track still has a position, and the arm must stay exactly where it
+        // stopped rather than snapping anywhere.
+        if(clock) clock.playing = false;
+        if(roomDrove) setPlaying(false);
+        el('stylusInfo').dataset.np = np.track ? `${np.artist} — ${np.track}` : '';
+        return;
+      }
+
+      const key = np.artist + ' ' + np.track;
+      const rec = findRecord(np);
+      if(key !== lastKey){
+        lastKey = key;
+        if(rec) cueTo(rec, np.track); else lacquer(np);
+        el('stylusInfo').dataset.np = rec ? '' : `${np.artist} — ${np.track}`;
+      }
+      // Paint AFTER cueTo, so REC is already the record we just put on and the
+      // first tick of a new track is not reported as a mismatch.
+      paint(np, null, !!rec && rec === REC);
+
+      // The motor follows the ROOM, and it is checked every tick rather than
+      // only when the track changes. Before this, a track with no pressing --
+      // which is most of them, since a record needs five distinct tracks to
+      // exist -- left the deck stopped: something was audibly playing and the
+      // platter sat dead still, which reads as the app being broken rather than
+      // as the record being unpressed. A record you have not earned yet still
+      // turns. It is just blank.
+      if(!S.spin.checked && !lifting){ S.spin.checked = true; roomDrove = true; }
+      if(!playing && !lifting) setPlaying(true);      // resumed
+
+      // Re-anchor the clock on every push. `matched` gates it for the same
+      // reason YT_SYNC checks the video belongs to the groove: driving the arm
+      // from a clock that belongs to a different record puts the needle on a
+      // song that is not on the disc in front of you.
+      const anchor = { pos: +np.position || 0, dur: +np.duration || 0,
+                       at: performance.now(), playing: !!np.playing,
+                       key: norm(np.track),
+                       // An UNPRESSED track is just as much "the thing on the
+                       // platter" as a pressed one -- the lacquer put it there.
+                       // Requiring a pressing here meant the clock stood down
+                       // for most of what actually gets played, and the arm fell
+                       // back to the free-running creep: a fixed twenty minutes
+                       // a side, unrelated to the song, which is why the readout
+                       // did not track smoothly. What matters is whether the
+                       // record on the deck is carrying THIS track, however it
+                       // got there.
+                       matched: !!(REC && REC.tracks &&
+                                   REC.tracks.some(t => norm(t.t) === norm(np.track))) };
+
+      // MONOTONIC WITHIN A TRACK.
+      //
+      // SMTC's position is refreshed on Windows' own schedule, not ours, so a
+      // sample can arrive describing a moment EARLIER than one already shown.
+      // Taken literally that walks the readout -- and the needle -- backwards
+      // several times a second. So while the same track keeps playing, a
+      // backwards step is only believed when it is big enough to be a real
+      // seek; anything smaller is a stale sample and the running estimate is
+      // kept instead. A forward jump is always believed: that is a skip ahead.
+      if(clock && clock.key === anchor.key && clock.playing && anchor.playing){
+        const running = clock.pos + (performance.now() - clock.at)/1000;
+        if(anchor.pos < running && running - anchor.pos < 2) anchor.pos = running;
+      }
+      clock = anchor;
   }
 
   async function tick(){
     try{
       const r = await fetch('/api/now', { cache:'no-store' });
-      const np = await r.json();
+      apply(await r.json());
       failed = 0;
-      if(np.error){ paint(null, np.error); return; }
-      paint(np);
-      if(!np.playing) { lastKey = null; return; }
-      const key = np.artist + ' ' + np.track;
-      if(key === lastKey) return;              // same track, nothing to do
-      lastKey = key;
-      const rec = findRecord(np);
-      if(rec) cueTo(rec, np.track);
-      el('stylusInfo').dataset.np = rec ? '' : `${np.artist} — ${np.track}`;
     }catch(e){
+      REPORT(`now-tick failed (${failed + 1}): ${e && e.stack || e}`);
       // Server gone (or we are on file://). Stop after a few tries rather than
       // hammering a socket that is not coming back.
       if(++failed > 4) clearInterval(NOW.timer);
       paint(null, e.message);
     }
   }
-  const api = { tick, timer: 0 };
-  api.timer = setInterval(tick, 15000);
+  const api = { tick, timer: 0, es: null };
+
+  // Push, not poll. /api/stream holds the connection open and writes the moment
+  // the state changes, so pausing the music reaches the deck in about the time
+  // SMTC takes to report it rather than on the next poll boundary.
+  try{
+    api.es = new EventSource('/api/stream');
+    api.es.onmessage = e => {
+      try{ apply(JSON.parse(e.data)); }catch(err){ REPORT('stream parse: ' + err); }
+    };
+    // EventSource reconnects by itself; nothing to do here but not die.
+    api.es.onerror = () => {};
+  }catch(e){ REPORT('stream unavailable: ' + e); }
+
+  // The poll stays as a floor in case the stream never establishes at all --
+  // 3s, not the old 15, which was reasoned from Last.fm's rate limit and makes
+  // no sense against a loopback socket in the same process.
+  api.timer = setInterval(tick, 3000);
   tick();
   return api;
 })();

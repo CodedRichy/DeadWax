@@ -1,0 +1,43 @@
+[package]
+name = "deadwax"
+version = "0.1.0"
+description = "DeadWax - records pressed from what you actually listen to"
+edition = "2021"
+rust-version = "1.77"
+
+# The capture probe is a real binary, not a test. Proving SMTC works in Rust
+# before any of it is wrapped in a window is the whole point of building the
+# risky layer first -- `cargo run --bin probe` needs no Tauri, no WebView, and
+# no UI to tell us whether the port is sound.
+[[bin]]
+name = "probe"
+path = "src/bin/probe.rs"
+
+[lib]
+name = "deadwax"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+regex = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = "0.4"
+serde_json = "1"
+
+[dependencies.windows]
+version = "0.58"
+features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Media",
+    "Media_Control",
+    "Storage_Streams",
+]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

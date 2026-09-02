@@ -219,6 +219,82 @@ fn index_page(state: &State) -> Vec<u8> {
     html.replace("const PUBLIC = true;", "const PUBLIC = false;").into_bytes()
 }
 
+fn ledger_json(state: &State) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let store = crate::store::Store::open(&state.root.join("src-tauri/deadwax.db"))?;
+
+    let days: Vec<String> = store
+        .days()?
+        .into_iter()
+        .map(|(d, kept, short, secs)| {
+            format!(
+                r#"{{"d":"{}","kept":{},"short":{},"secs":{:.0}}}"#,
+                json_escape(&d),
+                kept,
+                short,
+                secs
+            )
+        })
+        .collect();
+
+    let sources: Vec<String> = store
+        .sources()?
+        .into_iter()
+        .map(|(app, n)| format!(r#"{{"app":"{}","n":{}}}"#, json_escape(&app), n))
+        .collect();
+
+    let refused: Vec<String> = store
+        .recent_uncounted(40)?
+        .into_iter()
+        .map(|l| {
+            format!(
+                r#"{{"at":"{}","artist":"{}","title":"{}","dwell":{:.0},"dur":{:.0},"why":"{}"}}"#,
+                json_escape(&l.started_at),
+                json_escape(&l.artist),
+                json_escape(&l.title),
+                l.dwell_sec,
+                l.duration_sec,
+                json_escape(&l.end_reason)
+            )
+        })
+        .collect();
+
+    let total = store.count()?;
+    let kept = store.counted_listens()?.len();
+    let pending = state.pending.lock().unwrap();
+    // The nearest thing to a new record: the cold-start progress line, but for
+    // whatever is actually closest rather than whatever is playing.
+    let closest = pending
+        .iter()
+        .filter(|r| r.heard < crate::press::TEST_PRESSING_FLOOR)
+        .max_by_key(|r| r.heard)
+        .map(|r| {
+            format!(
+                r#"{{"artist":"{}","album":"{}","heard":{},"floor":{}}}"#,
+                json_escape(&r.artist),
+                json_escape(&r.album),
+                r.heard,
+                crate::press::TEST_PRESSING_FLOOR
+            )
+        })
+        .unwrap_or_else(|| "null".into());
+    let albums = pending.len();
+    drop(pending);
+
+    Ok(format!(
+        r#"{{"total":{},"kept":{},"refused":{},"albums":{},"records":{},"closest":{},"days":[{}],"sources":[{}],"recent":[{}]}}"#,
+        total,
+        kept,
+        total as usize - kept,
+        albums,
+        state.shelf.lock().unwrap().len(),
+        closest,
+        days.join(","),
+        sources.join(","),
+        refused.join(",")
+    )
+    .into_bytes())
+}
+
 fn now_json(state: &State) -> Vec<u8> {
     let live = state.live.lock().unwrap();
     // The cover travels with the live track, not just with the shelf.
@@ -404,6 +480,24 @@ fn handle(mut stream: TcpStream, state: &State) {
                 (true, Ok(bytes)) => respond(&mut stream, "200 OK", content_type(&file), &bytes),
                 _ => respond(&mut stream, "404 Not Found", "text/plain", b"not found"),
             }
+        }
+        // THE LEDGER.
+        //
+        // A listen log records what was heard. It cannot record what was MISSED,
+        // and without that the whole dataset quietly lies: a stretch with no
+        // plays reads identically whether nothing was playing or the collector
+        // was dead. Days are reported only where they exist, so a gap stays a
+        // gap instead of being filled in with a zero.
+        //
+        // The refusals matter as much as the keeps. 150 of 390 listens here
+        // were seen and deliberately not counted; without showing them, a short
+        // play is indistinguishable from one the app simply missed.
+        "/api/ledger" => {
+            let body = match ledger_json(state) {
+                Ok(b) => b,
+                Err(e) => format!(r#"{{"error":"{}"}}"#, json_escape(&e.to_string())).into_bytes(),
+            };
+            respond(&mut stream, "200 OK", "application/json; charset=utf-8", &body);
         }
         // The shelf on its own, so the page can pick up records pressed while it
         // has been open rather than only the ones that existed at load.

@@ -614,8 +614,13 @@
      following you onto screens where it did nothing. The transport is the same:
      it was drawn ON TOP of the tray's own track table, covering the rows.
      Both belong to the deck, so both leave when you leave the deck. */
-  body.uiopen #yt,body.shelfopen #yt{opacity:0;visibility:hidden;pointer-events:none}
-  body.shelfopen #cue{opacity:0;visibility:hidden;pointer-events:none}
+  body.uiopen #yt,body.shelfopen #yt,body.screen-ledger #yt{
+    opacity:0;visibility:hidden;pointer-events:none}
+  body.shelfopen #cue,body.screen-ledger #cue{opacity:0;visibility:hidden;pointer-events:none}
+  /* The deck's own type goes with it. */
+  body.screen-ledger #np,body.screen-ledger #liner,body.screen-ledger #cat,
+  body.screen-ledger #head,body.screen-ledger #empty{
+    opacity:0;visibility:hidden;pointer-events:none}
   #yt,#cue{transition:opacity .28s var(--ease),visibility .28s}
   /* An empty deck has nothing to cue, pause or flip. Offering "Pause" when
      nothing has ever played is the transport lying about its own state. */
@@ -785,6 +790,156 @@
   #stylusInfo[data-np]:not([data-np=""]){display:block}
   #stylusInfo b{color:var(--accent);font-weight:400}
 
+
+  /* ---- the rail -------------------------------------------------------
+     Three screens, and the nav is the edge of a crate seen side-on: the only
+     navigation metaphor this product can use that nothing else can. No pill,
+     no fill, no icon set -- the active screen is marked by the accent and by
+     coming forward, which is how a record you are pulling actually reads.
+     Vertical because a spine is vertical. */
+  #nav{
+    position:fixed;left:0;top:0;bottom:0;width:52px;z-index:12;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:34px;
+    border-right:1px solid var(--rule);
+    background:linear-gradient(90deg,#0a0a0c,#08080a);
+  }
+  #nav button{
+    -webkit-appearance:none;appearance:none;
+    border:0;background:none;padding:14px 0;width:100%;cursor:pointer;
+    font-family:var(--mono);font-size:9px;letter-spacing:.28em;text-transform:uppercase;
+    color:#54504a;
+    writing-mode:vertical-rl;transform:rotate(180deg);
+    transition:color .25s var(--ease),transform .35s var(--ease);
+  }
+  #nav button:hover{color:var(--ink-2)}
+  #nav button[aria-current="true"]{color:var(--accent)}
+  /* Forward, not filled. A record you pull stands proud of the ones beside it. */
+  #nav button[aria-current="true"]{transform:rotate(180deg) translateY(4px)}
+  #nav .mark{
+    width:16px;height:1px;background:var(--rule);flex:0 0 auto;
+  }
+  /* Everything fixed to the left edge clears the rail.
+     body{padding-left} does NOT do this: every left-anchored element in this
+     page is position:fixed, which is laid out against the viewport and ignores
+     the body box entirely -- so the wordmark, the title block and the empty
+     state all sat underneath the rail. The anchor itself has to move. */
+  :root{ --rail:52px }
+  #head,#np,#empty{ left:calc(var(--rail) + var(--edge)) !important }
+  /* The transport is window-centred; centre it on what is left of the window
+     rather than on the window, or it drifts right by half the rail. */
+  #cue{ left:calc(50% + var(--rail)/2) }
+  /* The crate and the tray are full-window overlays; they start after the rail
+     so the nav is never covered by the thing it navigates to. */
+  #shelf,#ui{ left:var(--rail) }
+
+  /* ---- the ledger -----------------------------------------------------
+     What a listen log cannot say on its own: what it MISSED. A stretch with no
+     plays reads identically whether nothing was on or the collector was dead,
+     so the days it actually saw are drawn and the rest are left as holes. */
+  /* Two columns, not a stack. Stacked, the disc fell below the fold and the
+     right half of a 1280 window was empty -- the page read as a phone layout
+     that had been stretched. The run is the subject, so it takes the right
+     column and stays put while the reading matter scrolls past it. */
+  #ledger{
+    position:fixed;inset:0 0 0 var(--rail);z-index:9;
+    background:var(--bg);overflow-y:auto;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.85fr);
+    grid-template-areas:'read run';
+    column-gap:clamp(28px,4vw,72px);align-items:start;
+    /* The ledger has no record on it, so it must not inherit a record's accent.
+       Left alone it took whatever sleeve was last read -- so the trust screen
+       came out dashboard-blue because a Daniel Caesar cover happened to be on
+       the platter. Bone is the app's own colour. */
+    --accent:#c9a227;
+    padding:56px var(--edge) 80px;
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .3s var(--ease),visibility .3s;
+  }
+  body.screen-ledger #ledger{opacity:1;visibility:visible;pointer-events:auto}
+  #ledRead{grid-area:read;min-width:0}
+  #ledRun{
+    grid-area:run;min-width:0;position:sticky;top:56px;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  /* Both columns start on the same line. The run's header carried the generic
+     46px top margin, which parked it 100px below the title it sits beside and
+     left the top-right corner empty. */
+  #ledRun .ledHead{margin-top:0}
+  @media (max-width:1080px){
+    #ledger{grid-template-columns:1fr;grid-template-areas:'read' 'run'}
+    #ledRun{position:static;margin-top:34px}
+  }
+  #ledger h2{
+    font-family:var(--display);font-weight:400;font-size:clamp(30px,3.2vw,46px);
+    margin:0;letter-spacing:-.01em;color:var(--ink);
+  }
+  #ledger .sub{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-3);margin-top:10px;max-width:62ch;line-height:1.9;
+  }
+  /* Not a row of four cards. A stamped matrix block, the way a run-out area
+     carries its numbers: hairline rules, mono, the figure and its meaning on
+     one line rather than stacked into tiles. */
+  #ledStats{margin:34px 0 4px;border-top:1px solid var(--rule)}
+  #ledStats div{
+    display:flex;align-items:baseline;justify-content:space-between;gap:24px;
+    padding:12px 0;border-bottom:1px solid #131317;
+  }
+  /* Figures share the size of the "closest" line rather than inventing a third
+     display size between it and the title. Two sizes carry the whole screen:
+     the title, and everything that is a fact. */
+  #ledStats b{
+    font-family:var(--display);font-weight:400;
+    font-size:clamp(19px,1.8vw,24px);color:var(--ink);line-height:1;
+    order:2;font-variant-numeric:tabular-nums;
+  }
+  #ledStats span{
+    font-family:var(--mono);font-size:9px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--ink-3);order:1;
+  }
+  #ledStats div.lit b{color:var(--accent)}
+  #ledStats div.lit span{color:var(--ink-2)}
+
+  /* ---- the run, drawn as a groove ----
+     This was a bar chart, which is the first safe idea and the one shape that
+     says nothing about what this app is. It is a spiral now: the run of days
+     cut inward from the edge the way a side is cut, thickness for how much was
+     heard, and a day with no collector left as a literal break in the groove --
+     which is exactly what it was. */
+  #ledDisc{width:100%;max-width:412px;display:block;margin:0 auto}
+  #ledDisc .lbl{
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;
+    text-transform:uppercase;fill:#4a463f;
+  }
+  /* One vertical scale, in multiples of 8: 40 above a section head, 16 below.
+     The old 46/14 was arbitrary and made the stats block sit at a different
+     rhythm from every other section. */
+  .ledHead{
+    margin:40px 0 16px;font-family:var(--mono);font-size:9px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--ink-3);
+    border-bottom:1px solid var(--rule);padding-bottom:10px;
+  }
+  #ledGrooveKey{
+    margin-top:20px;max-width:46ch;text-align:center;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;line-height:2.2;
+    text-transform:uppercase;color:#4a463f;
+  }
+  #ledClosest{
+    font-family:var(--display);font-size:clamp(18px,1.8vw,24px);color:var(--ink);
+  }
+  #ledClosest em{font-style:normal;color:var(--accent)}
+  #ledSrc,#ledRecent{list-style:none;margin:0;padding:0}
+  #ledSrc li,#ledRecent li{
+    display:flex;justify-content:space-between;gap:20px;align-items:baseline;
+    padding:9px 0;border-bottom:1px solid #131317;
+    font-family:var(--mono);font-size:10.5px;color:var(--ink-2);
+  }
+  #ledRecent li .w{color:#57534c;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+    white-space:nowrap}
+  #ledRecent li .n{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #ledSrc li b{color:var(--ink);font-weight:400}
+
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.01ms !important;transition-duration:.01ms !important}
   }
@@ -943,6 +1098,41 @@
      obscuring any part of it, including its controls, and it must be at least
      200x200. So it sits in the corner as its own panel -- it is never allowed
      to slide under the record, and nothing may be drawn over it. -->
+
+<nav id="nav" aria-label="Screens">
+  <button id="navNow"    aria-current="true">Now</button>
+  <div class="mark"></div>
+  <button id="navCrate">Crate</button>
+  <div class="mark"></div>
+  <button id="navLedger">Ledger</button>
+</nav>
+
+<section id="ledger" aria-label="The ledger">
+ <div id="ledRead">
+  <h2>The ledger</h2>
+  <p class="sub">what the collector saw, and what it refused. a log of plays cannot
+     record what it missed &mdash; so the days it was actually watching are drawn,
+     and the rest are left as holes.</p>
+
+  <div id="ledStats"></div>
+
+  <div class="ledHead">Closest to a pressing</div>
+  <div id="ledClosest"></div>
+
+  <div class="ledHead">Where it came through</div>
+  <ul id="ledSrc"></ul>
+
+  <div class="ledHead">Seen and not counted</div>
+  <ul id="ledRecent"></ul>
+ </div>
+
+ <div id="ledRun">
+  <div class="ledHead" style="width:100%">The run</div>
+  <svg id="ledDisc" viewBox="0 0 520 520" aria-hidden="true"></svg>
+  <div id="ledGrooveKey"></div>
+ </div>
+</section>
+
 <div id="drop">drop your history file</div>
 
 <div id="empty">
@@ -2391,6 +2581,165 @@ function crateTo(i){
 
 renderShelf();
 
+
+// ---- screens --------------------------------------------------------------
+// Three places to be, one at a time. The crate was already a full-window
+// overlay and the ledger is another, so what was two ad-hoc panels fighting
+// over `body` classes becomes one rule: exactly one screen class at a time,
+// and the rail reflects it.
+const SCREENS = ['now', 'crate', 'ledger'];
+let SCREEN = 'now';
+
+function setScreen(name){
+  if(!SCREENS.includes(name)) name = 'now';
+  SCREEN = name;
+  for(const s of SCREENS) document.body.classList.toggle('screen-' + s, s === name);
+  // The crate keeps its own long-standing class, so nothing that already
+  // depended on it has to be rewritten.
+  document.body.classList.toggle('shelfopen', name === 'crate');
+  if(name !== 'crate') setPanel(null);
+  const marks = { now:'navNow', crate:'navCrate', ledger:'navLedger' };
+  for(const [k,id] of Object.entries(marks)){
+    const b = document.getElementById(id);
+    if(b) b.setAttribute('aria-current', String(k === name));
+  }
+  if(name === 'ledger') renderLedger();
+}
+
+// ---- the ledger -----------------------------------------------------------
+const clock_ = s => {
+  s = Math.max(0, Math.round(s));
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+};
+const fmtSecs = s => {
+  const h = Math.floor(s/3600), m = Math.round((s%3600)/60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+};
+
+async function renderLedger(){
+  let d;
+  try{
+    const r = await fetch('/api/ledger', { cache:'no-store' });
+    d = await r.json();
+  }catch(e){ if(window.REPORT) REPORT('ledger: ' + e); return; }
+  if(!d || d.error) return;
+
+  const stat = (n, label, lit) =>
+    `<div class="${lit?'lit':''}"><b>${n}</b><span>${label}</span></div>`;
+  document.getElementById('ledStats').innerHTML =
+      stat(d.kept.toLocaleString(),    'listens kept')
+    + stat(d.refused.toLocaleString(), 'seen, not counted')
+    + stat(d.albums.toLocaleString(),  'albums known')
+    + stat(d.records.toLocaleString(), 'records pressed', true);
+
+  // ---- the run, cut as a groove ----
+  //
+  // This was a bar chart. A bar chart is the first safe idea and it says
+  // nothing about what this thing is -- the same picture would serve a server
+  // uptime page. A side of a record is cut as one continuous spiral from the
+  // edge inward, and that is literally what a run of days is, so it is drawn
+  // that way: one segment per day, thickness for how much was actually heard,
+  // and a day the collector was not running left as a BREAK. A gap in a groove
+  // is not decoration here; it is the honest mark for a stretch nothing was
+  // watching, and the whole reason this screen exists.
+  const svg = document.getElementById('ledDisc');
+  const days = d.days || [];
+  if(!days.length){ svg.innerHTML = ''; return; }
+  const byDay = new Map(days.map(x => [x.d, x]));
+  const day1 = new Date(days[0].d + 'T00:00:00');
+  const dayN = new Date(days[days.length-1].d + 'T00:00:00');
+  const span = Math.max(1, Math.round((dayN - day1) / 86400000) + 1);
+  const peak = Math.max(...days.map(x => x.secs), 1);
+
+  // R_IN clears the label rather than running under it -- the innermost turns
+  // were crossing the printed dates, which is the one place a groove never goes.
+  const C = 260, R_OUT = 236, R_IN = 118, TURNS = 2.4;
+  const A0 = -Math.PI/2, AMAX = TURNS * Math.PI * 2;
+  const at = f => {                       // f is 0..1 along the whole run
+    const a = A0 + f*AMAX;
+    const r = R_OUT - (R_OUT - R_IN)*f;
+    return [C + Math.cos(a)*r, C + Math.sin(a)*r];
+  };
+
+  const parts = [];
+  // The lead-in: the spiral the collector was supposed to be cutting, drawn
+  // faint underneath so the breaks read as MISSING rather than as never having
+  // existed.
+  {
+    const pts = [];
+    for(let i = 0; i <= span*14; i++) pts.push(at(i/(span*14)).map(n=>n.toFixed(1)).join(','));
+    parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="#17171c" stroke-width="1.25"/>`);
+  }
+
+  let seen = 0;
+  for(let i = 0; i < span; i++){
+    const dt = new Date(day1.getTime() + i*86400000);
+    const row = byDay.get(dt.toISOString().slice(0,10));
+    if(!row) continue;                     // a hole stays a hole
+    seen++;
+    const pts = [];
+    // A little inset each side so adjacent days read as separate cuts.
+    for(let k = 0; k <= 10; k++) pts.push(at((i + 0.06 + (k/10)*0.88)/span).map(n=>n.toFixed(1)).join(','));
+    const w = 1.6 + (row.secs / peak) * 7.4;
+    parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)"`
+             + ` stroke-width="${w.toFixed(2)}" stroke-linecap="round" opacity="0.9"/>`);
+    // What was refused rides just inside the cut, the way surface noise sits
+    // beside a groove rather than in it.
+    if(row.short){
+      const sp = [];
+      for(let k = 0; k <= 10; k++){
+        const f = (i + 0.06 + (k/10)*0.88)/span;
+        const a = A0 + f*AMAX, r = R_OUT - (R_OUT-R_IN)*f - (w/2 + 2.4);
+        sp.push([(C+Math.cos(a)*r).toFixed(1), (C+Math.sin(a)*r).toFixed(1)].join(','));
+      }
+      const sw = 0.8 + Math.min(row.short/Math.max(row.kept+row.short,1), 1) * 2.2;
+      parts.push(`<polyline points="${sp.join(' ')}" fill="none" stroke="#57534c" stroke-width="${sw.toFixed(2)}"/>`);
+    }
+  }
+
+  // The label, and the spindle. A record is not a chart; it has a middle.
+  parts.push(`<circle cx="${C}" cy="${C}" r="${R_IN-14}" fill="#101013" stroke="#1c1c21"/>`);
+  parts.push(`<circle cx="${C}" cy="${C}" r="4" fill="var(--bg)" stroke="#26262c"/>`);
+  parts.push(`<text class="lbl" x="${C}" y="${C-16}" text-anchor="middle">${esc(days[0].d)}</text>`);
+  parts.push(`<text class="lbl" x="${C}" y="${C+26}" text-anchor="middle">${esc(days[days.length-1].d)}</text>`);
+  svg.innerHTML = parts.join('');
+
+  const total = days.reduce((a,x)=>a+x.secs,0);
+  document.getElementById('ledGrooveKey').textContent =
+    `${seen} of ${span} days cut · ${span-seen} with nothing watching · `
+    + `${fmtSecs(total)} heard · thickness is time · the breaks are the gaps`;
+
+  // ---- closest to a pressing ----
+  const c = d.closest;
+  document.getElementById('ledClosest').innerHTML = c
+    ? `${esc(c.artist)} &mdash; ${esc(c.album)} &nbsp;<em>${c.heard} of ${c.floor} tracks</em>`
+    : '<span style="color:var(--ink-3)">nothing in progress</span>';
+
+  // ---- sources ----
+  document.getElementById('ledSrc').innerHTML = (d.sources||[]).map(x => {
+    // Store app IDs are unreadable; show the recognisable part.
+    const name = x.app.includes('!') ? x.app.split('!').pop().replace(/^Microsoft\./,'')
+               : x.app.replace(/\.exe$/i,'');
+    return `<li><b>${esc(name || 'unknown')}</b><span>${x.n.toLocaleString()}</span></li>`;
+  }).join('');
+
+  // ---- refusals ----
+  document.getElementById('ledRecent').innerHTML = (d.recent||[]).map(x => {
+    // mm:ss, matching the deck's own readout -- and NOT "90s of 244s", which
+    // the uppercase label style turned into "905 OF 2445". Units made of
+    // letters cannot sit beside digits in a tracked, uppercased mono face.
+    const why = x.dur > 0
+      ? `${clock_(x.dwell)} / ${clock_(x.dur)}`
+      : esc(x.why || 'not counted');
+    return `<li><span class="n">${esc(x.artist)} &mdash; ${esc(x.title)}</span>`
+         + `<span class="w">${why}</span></li>`;
+  }).join('');
+}
+
+document.getElementById('navNow').onclick    = () => setScreen('now');
+document.getElementById('navCrate').onclick  = () => setScreen('crate');
+document.getElementById('navLedger').onclick = () => setScreen('ledger');
+
 // Opening one panel closes the other. They used to stack -- body could carry
 // both uiopen and shelfopen, the shelf covered a tray you had forgotten was
 // open, and the Controls button still read "Close" while the tray was
@@ -2404,8 +2753,8 @@ function setPanel(which){
   document.getElementById('bCtl').textContent = wantUI ? 'Close' : 'Controls';
   document.getElementById('bShelf').textContent = wantShelf ? 'Close' : 'Shelf';
 }
-const openShelf  = () => setPanel('shelf');
-const closeShelf = () => setPanel(null);
+const openShelf  = () => setScreen('crate');
+const closeShelf = () => setScreen('now');
 
 // ---- riffling -------------------------------------------------------------
 const crate = document.getElementById('crate');

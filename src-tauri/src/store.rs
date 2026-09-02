@@ -226,6 +226,69 @@ impl Store {
         rows.collect()
     }
 
+    /// One row per day the collector saw anything: how much was kept, how much
+    /// was refused, and how long was actually listened to.
+    ///
+    /// A day with nothing is ABSENT rather than zero, which is the point -- the
+    /// ledger has to be able to show the difference between a quiet day and a
+    /// day the collector was not running, and inventing zeroes would erase it.
+    pub fn days(&self) -> rusqlite::Result<Vec<(String, u32, u32, f64)>> {
+        let mut stmt = self.conn.prepare(
+            r#"SELECT substr(started_at, 1, 10) AS d,
+                      SUM(counted),
+                      SUM(1 - counted),
+                      SUM(CASE WHEN counted = 1 THEN dwell_sec ELSE 0 END)
+               FROM listens GROUP BY d ORDER BY d ASC"#,
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })?;
+        rows.collect()
+    }
+
+    /// Which players the listening came through.
+    pub fn sources(&self) -> rusqlite::Result<Vec<(String, u32)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT source_app, COUNT(*) n FROM listens GROUP BY source_app ORDER BY n DESC",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect()
+    }
+
+    /// The most recent listens that were seen but NOT counted.
+    ///
+    /// These are the ledger's whole reason for existing. Without them a short
+    /// play is indistinguishable from a play that never happened, and the user
+    /// has no way to tell "the app ignored that on purpose" from "the app
+    /// missed it".
+    pub fn recent_uncounted(&self, limit: u32) -> rusqlite::Result<Vec<Listen>> {
+        let mut stmt = self.conn.prepare(
+            r#"SELECT started_at, ended_at, source_app, title, artist, album_title,
+                      album_artist, track_number, album_track_count, playback_type,
+                      duration_sec, dwell_sec, counted, end_reason
+               FROM listens WHERE counted = 0 ORDER BY started_at DESC LIMIT ?1"#,
+        )?;
+        let rows = stmt.query_map([limit], |r| {
+            Ok(Listen {
+                started_at: r.get(0)?,
+                ended_at: r.get(1)?,
+                source_app: r.get(2)?,
+                title: r.get(3)?,
+                artist: r.get(4)?,
+                album_title: r.get(5)?,
+                album_artist: r.get(6)?,
+                track_number: r.get(7)?,
+                album_track_count: r.get(8)?,
+                playback_type: r.get(9)?,
+                duration_sec: r.get(10)?,
+                dwell_sec: r.get(11)?,
+                counted: false,
+                end_reason: r.get(13)?,
+            })
+        })?;
+        rows.collect()
+    }
+
     pub fn count(&self) -> rusqlite::Result<i64> {
         self.conn.query_row("SELECT COUNT(*) FROM listens", [], |r| r.get(0))
     }
@@ -252,6 +315,28 @@ mod tests {
             counted,
             end_reason: "track changed".into(),
         }
+    }
+
+    #[test]
+    fn ledger_separates_kept_from_refused() {
+        let s = Store::open_in_memory().unwrap();
+        s.append(&listen("A", "kept", true)).unwrap();
+        s.append(&listen("A", "also kept", true)).unwrap();
+        s.append(&listen("A", "too short", false)).unwrap();
+
+        let days = s.days().unwrap();
+        assert_eq!(days.len(), 1, "all three are the same day");
+        let (d, counted, short, secs) = &days[0];
+        assert_eq!(d, "2026-09-01");
+        assert_eq!(*counted, 2);
+        assert_eq!(*short, 1);
+        // Only counted listens contribute time; a four-second skip is not time
+        // spent listening.
+        assert_eq!(*secs, 360.0);
+
+        let refused = s.recent_uncounted(10).unwrap();
+        assert_eq!(refused.len(), 1);
+        assert_eq!(refused[0].title, "too short");
     }
 
     #[test]

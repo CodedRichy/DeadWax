@@ -248,8 +248,12 @@
   #npCov[data-live="1"]::after{content:' · on now';color:var(--accent)}
   /* Playing something we have no pressing of. Saying so is better than
      silently leaving the wrong record on the platter. */
+  /* The readout to the left of this ALREADY names the track -- repeating
+     "artist -- title" after it printed the same thing twice on one line and
+     was what pushed the block past its own width. The attribute stays: it is
+     what the selector keys on, and it is the state, not the copy. */
   #stylusInfo[data-np]:not([data-np=""])::after{
-    content:' · not pressed — ' attr(data-np);color:var(--ink-3);
+    content:' · not pressed';color:var(--ink-3);
   }
 
   /* ---- tracklist, set as liner notes down the right margin ---- */
@@ -777,7 +781,12 @@
   /* the needle's own readout, set as the last line of the title block */
   #stylusInfo{
     font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
-    color:var(--ink-3);white-space:nowrap;margin-top:11px;
+    color:var(--ink-3);margin-top:11px;
+    /* nowrap here overflowed #np's max-width instead of respecting it: the
+       ::after carries a full "artist -- title", which on a long one ran
+       straight across the bottom of the frame and under the centred transport
+       row. The block already has a width; the readout has to live inside it. */
+    line-height:1.5;text-wrap:pretty;
   }
   /* Nothing playing: collapse it, or its margin holds an 11px gap under the last
      visible line and the title block stops meeting the baseline. */
@@ -789,6 +798,33 @@
      it. Specificity puts this after the :empty rule on purpose. */
   #stylusInfo[data-np]:not([data-np=""]){display:block}
   #stylusInfo b{color:var(--accent);font-weight:400}
+
+  /* ---- rest ------------------------------------------------------------
+     Not a screensaver and not a dim. Rest is this app's true resting state:
+     the record is still turning, it still says what is on it, and it says in
+     one line what the collector is doing. Everything that exists only to be
+     CLICKED steps back, because at rest nothing is being clicked.
+
+     Chrome fades rather than hides: hiding it would reflow the frame, and the
+     one thing that must not move when you stop touching this is the record. */
+  body.resting #nav,body.resting #cue,body.resting #head,
+  body.resting #liner,body.resting #cat,body.resting #ui,body.resting #verBtn{
+    opacity:.12;transition:opacity 1.6s ease}
+  body.resting #np .m{opacity:.35;transition:opacity 1.6s ease}
+  #nav,#cue,#head,#liner,#cat,#ui,#verBtn,#np .m{transition:opacity .25s ease}
+  /* Rest is entered slowly and left instantly -- waking has to feel like the
+     app was never away. */
+  #restLine{
+    font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-3);margin-top:13px;opacity:0;pointer-events:none;
+    transition:opacity 1.6s ease}
+  body.resting #restLine{opacity:1}
+  body.resting #restLine.warn{color:#8a6a3a}
+  @media (prefers-reduced-motion:reduce){
+    body.resting #nav,body.resting #cue,body.resting #head,
+    body.resting #liner,body.resting #cat,body.resting #ui,body.resting #verBtn,
+    body.resting #np .m,#restLine{transition:none}
+  }
 
 
   /* ---- the rail -------------------------------------------------------
@@ -929,6 +965,11 @@
     font-family:var(--display);font-size:clamp(18px,1.8vw,24px);color:var(--ink);
   }
   #ledClosest em{font-style:normal;color:var(--accent)}
+  /* Absence is written out, not drawn as a zero -- a 0 next to a label reads as
+     a measurement, and none of these are measured yet. */
+  #ledSrc li.none,#ledRecent li.none,#ledClosest .none{
+    display:block;color:var(--ink-3);border:0;font-style:italic;letter-spacing:.04em;
+    text-transform:none;font-family:var(--serif,inherit)}
   #ledSrc,#ledRecent{list-style:none;margin:0;padding:0}
   #ledSrc li,#ledRecent li{
     display:flex;justify-content:space-between;gap:20px;align-items:baseline;
@@ -977,6 +1018,10 @@
   <div class="a" id="npArtist">Pierce The Veil</div>
   <div class="m"><b id="npPlays">642 plays</b> · <span id="npCov">demo record</span></div>
   <div id="stylusInfo"></div>
+  <!-- Only ever visible at rest. The app is glanced at far more often than it
+       is operated, and until now its resting state WAS its operated state:
+       every control lit, waiting to be used, at three in the morning. -->
+  <div id="restLine"></div>
 </div>
 
 <aside id="liner">
@@ -1183,7 +1228,7 @@ uniform vec2  uRes;
 uniform vec3  uCamPos, uFwd, uRight, uUp;
 uniform float uTanFov;
 uniform int   uN;
-uniform float uT0[16], uT1[16], uPitch[16], uPh0[16], uWear[16];
+uniform float uT0[24], uT1[24], uPitch[24], uPh0[24], uWear[24];
 uniform float uTotalWear;
 uniform sampler2D uLabel;
 out vec4 frag;
@@ -1501,7 +1546,7 @@ void main(){
     if(r<R_LOCK1 || r>R_MUS1){
       pitch = 150.*uDensity; phase = r*pitch; wear=.18*uTotalWear; loud=.30; music=true;
     } else {
-      for(int i=0;i<16;i++){
+      for(int i=0;i<24;i++){
         if(i>=uN) break;
         if(r>=uT0[i] && r<uT1[i]){
           pitch = uPitch[i]*uDensity;
@@ -1979,7 +2024,12 @@ function layout(rec, side){
   el('npArtist').textContent = rec.artist;
   // the title block reports the whole record, not just the side on the platter
   const recPlays = rec.tracks.reduce((a,b)=>a+b.plays,0);
-  el('npPlays').textContent  = recPlays.toLocaleString()+' play'+(recPlays===1?'':'s');
+  // "0 plays" on the record currently turning is a measurement of nothing, and
+  // it reads as the app having lost count rather than as a first listen. A
+  // track that has not finished has not been played yet; say that instead.
+  el('npPlays').textContent  = recPlays
+    ? recPlays.toLocaleString()+' play'+(recPlays===1?'':'s')
+    : 'first time on the deck';
   // A record you pressed yourself has no "coverage" -- every track on it is one
   // you added. Count what you have actually played instead of printing "demo
   // record", which was left over from the baked shelf and is simply untrue here.
@@ -1989,11 +2039,18 @@ function layout(rec, side){
     // It is a record being cut, and what matters is how far off a pressing it
     // is. Saying so is also the only place the five-track floor is ever
     // explained to anyone.
-    el('npCov').textContent = rec.pending
+    // ...and having already said "first time on the deck", a second clause
+    // counting the same nothing is the zero twice over. One absence, one line.
+    const cov = rec.pending
       ? `${rec.pending.heard} of ${rec.pending.floor} tracks · not pressed yet`
       : rec.len
       ? `${rec.heard}/${rec.len} tracks heard`
-      : `${heard}/${rec.tracks.length} track${rec.tracks.length===1?'':'s'} heard`;
+      : heard
+      ? `${heard}/${rec.tracks.length} track${rec.tracks.length===1?'':'s'} heard`
+      : '';
+    el('npCov').textContent = cov;
+    // the separator belongs to the second clause, not to the line
+    el('npCov').previousSibling.textContent = cov ? ' · ' : '';
   }
 
   // catalogue line -- a real sleeve always carries one
@@ -2205,13 +2262,20 @@ gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
 
 const U=n=>gl.getUniformLocation(prog,n);
 
+// The shader has MAX_BANDS slots and no more. Long records are clamped HERE
+// rather than in layout(), because layout() also drives the tracklist -- capping
+// it there would silently desync the printed sleeve from the pressed record.
+// The overflow tracks lose their groove, not their listing.
+const MAX_BANDS = 24;
 function uploadBands(){
-  gl.uniform1i(U('uLabel'),0); gl.uniform1i(U('uN'),bands.length);
-  gl.uniform1fv(U('uT0'),new Float32Array(bands.map(b=>b.r0)));
-  gl.uniform1fv(U('uT1'),new Float32Array(bands.map(b=>b.r1)));
-  gl.uniform1fv(U('uPitch'),new Float32Array(bands.map(b=>b.pitch)));
-  gl.uniform1fv(U('uPh0'),new Float32Array(bands.map(b=>b.ph0)));
-  gl.uniform1fv(U('uWear'),new Float32Array(bands.map(b=>b.wear)));
+  const N = Math.min(bands.length, MAX_BANDS);
+  const f = k => new Float32Array(bands.slice(0,N).map(k));
+  gl.uniform1i(U('uLabel'),0); gl.uniform1i(U('uN'),N);
+  gl.uniform1fv(U('uT0'),f(b=>b.r0));
+  gl.uniform1fv(U('uT1'),f(b=>b.r1));
+  gl.uniform1fv(U('uPitch'),f(b=>b.pitch));
+  gl.uniform1fv(U('uPh0'),f(b=>b.ph0));
+  gl.uniform1fv(U('uWear'),f(b=>b.wear));
   gl.uniform1f(U('uTotalWear'),totalWear);
 }
 function uploadLabel(rec, art){
@@ -2616,22 +2680,13 @@ const fmtSecs = s => {
   return h ? `${h}h ${m}m` : `${m}m`;
 };
 
-async function renderLedger(){
-  let d;
-  try{
-    const r = await fetch('/api/ledger', { cache:'no-store' });
-    d = await r.json();
-  }catch(e){ if(window.REPORT) REPORT('ledger: ' + e); return; }
-  if(!d || d.error) return;
-
-  const stat = (n, label, lit) =>
-    `<div class="${lit?'lit':''}"><b>${n}</b><span>${label}</span></div>`;
-  document.getElementById('ledStats').innerHTML =
-      stat(d.kept.toLocaleString(),    'listens kept')
-    + stat(d.refused.toLocaleString(), 'seen, not counted')
-    + stat(d.albums.toLocaleString(),  'albums known')
-    + stat(d.records.toLocaleString(), 'records pressed', true);
-
+// Cut as its own function so the empty case can bail out of the groove
+// WITHOUT bailing out of the ledger. This used to `return` from
+// renderLedger(), which meant a first run showed four headings standing
+// over nothing at all.
+function cutGroove(d){
+  const svg = document.getElementById('ledDisc');
+  const days = d.days || [];
   // ---- the run, cut as a groove ----
   //
   // This was a bar chart. A bar chart is the first safe idea and it says
@@ -2642,9 +2697,18 @@ async function renderLedger(){
   // and a day the collector was not running left as a BREAK. A gap in a groove
   // is not decoration here; it is the honest mark for a stretch nothing was
   // watching, and the whole reason this screen exists.
-  const svg = document.getElementById('ledDisc');
-  const days = d.days || [];
-  if(!days.length){ svg.innerHTML = ''; return; }
+  if(!days.length){
+    // A record with no groove is not a record with a groove of zero. Draw the
+    // blank lacquer -- label and spindle, nothing cut -- and say so in words.
+    svg.innerHTML =
+        `<circle cx="260" cy="260" r="236" fill="none" stroke="#17171c"/>`
+      + `<circle cx="260" cy="260" r="104" fill="#101013" stroke="#1c1c21"/>`
+      + `<circle cx="260" cy="260" r="4" fill="var(--bg)" stroke="#26262c"/>`
+      + `<text class="lbl" x="260" y="264" text-anchor="middle">uncut</text>`;
+    document.getElementById('ledGrooveKey').textContent =
+      'nothing cut yet — the collector has not been watching for a whole day';
+    return;
+  }
   const byDay = new Map(days.map(x => [x.d, x]));
   const day1 = new Date(days[0].d + 'T00:00:00');
   const dayN = new Date(days[days.length-1].d + 'T00:00:00');
@@ -2653,7 +2717,22 @@ async function renderLedger(){
 
   // R_IN clears the label rather than running under it -- the innermost turns
   // were crossing the printed dates, which is the one place a groove never goes.
-  const C = 260, R_OUT = 236, R_IN = 118, TURNS = 2.4;
+  const C = 260, R_OUT = 236, R_IN = 118;
+
+  // TURNS WAS FIXED AT 2.4, AND THAT IS WHAT MADE THIS A PROGRESS RING.
+  //
+  // Two and a bit turns across 118px of travel puts ~49px between adjacent
+  // passes, so each day became a fat 50-degree arc floating in open black --
+  // the exact picture of a loading gauge, which is the one thing this must not
+  // look like. A groove is dense: its turns sit a hair apart, and it reads as a
+  // groove BECAUSE of that pitch, not because it is a spiral.
+  //
+  // So pitch is fixed at ~5px and the turn count follows from the length of the
+  // run. A longer history cuts a finer, deeper-packed record, which is also
+  // true of the object. The clamp keeps a two-day log from drawing one lonely
+  // circle and a two-year one from turning the disc into a solid grey wash.
+  const PITCH = 5.2;
+  const TURNS = Math.max(6, Math.min(34, (R_OUT - R_IN) / PITCH));
   const A0 = -Math.PI/2, AMAX = TURNS * Math.PI * 2;
   const at = f => {                       // f is 0..1 along the whole run
     const a = A0 + f*AMAX;
@@ -2667,8 +2746,12 @@ async function renderLedger(){
   // existed.
   {
     const pts = [];
-    for(let i = 0; i <= span*14; i++) pts.push(at(i/(span*14)).map(n=>n.toFixed(1)).join(','));
-    parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="#17171c" stroke-width="1.25"/>`);
+    // Sampled off the TURN COUNT, not the day count. At 22 turns the old
+    // day-based sampling gave ten points per revolution and drew a visible
+    // decagon.
+    const N = Math.ceil(TURNS * 96);
+    for(let i = 0; i <= N; i++) pts.push(at(i/N).map(n=>n.toFixed(1)).join(','));
+    parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="#17171c" stroke-width="1"/>`);
   }
 
   let seen = 0;
@@ -2677,23 +2760,36 @@ async function renderLedger(){
     const row = byDay.get(dt.toISOString().slice(0,10));
     if(!row) continue;                     // a hole stays a hole
     seen++;
+    // One day now covers more than a full revolution, so it needs points in
+    // proportion to its arc rather than a flat ten.
+    const K = Math.max(12, Math.ceil((TURNS/span) * 96));
     const pts = [];
     // A little inset each side so adjacent days read as separate cuts.
-    for(let k = 0; k <= 10; k++) pts.push(at((i + 0.06 + (k/10)*0.88)/span).map(n=>n.toFixed(1)).join(','));
-    const w = 1.6 + (row.secs / peak) * 7.4;
-    parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)"`
-             + ` stroke-width="${w.toFixed(2)}" stroke-linecap="round" opacity="0.9"/>`);
-    // What was refused rides just inside the cut, the way surface noise sits
-    // beside a groove rather than in it.
+    for(let k = 0; k <= K; k++) pts.push(at((i + 0.06 + (k/K)*0.88)/span).map(n=>n.toFixed(1)).join(','));
+    // Thickness has to stay UNDER the pitch or neighbouring turns weld into a
+    // solid band and the groove stops being one. That ceiling is why the range
+    // is 0.9..3.4 and not 1.6..9.
+    const w = 0.9 + (row.secs / peak) * 2.5;
+    // ...and not var(--accent). Gold on black is the vocabulary of a progress
+    // bar filling up, and it made the run look like a task being completed
+    // rather than a record being cut. This is lacquer catching light: a warm
+    // grey that brightens with how much was actually heard. The accent stays
+    // spent on the one number that is earned -- records pressed.
+    const lum = 0.42 + (row.secs / peak) * 0.58;
+    const g = c => Math.round(c * lum);
+    parts.push(`<polyline points="${pts.join(' ')}" fill="none"`
+             + ` stroke="rgb(${g(214)},${g(206)},${g(190)})"`
+             + ` stroke-width="${w.toFixed(2)}" stroke-linecap="round"/>`);
+    // What was refused used to ride on its own line just inside the cut. At
+    // this pitch there is no room beside a groove -- so it goes IN it, as a
+    // dashed overlay along the identical path. Surface noise is not a second
+    // groove running parallel to the first; it is the same groove, scuffed.
     if(row.short){
-      const sp = [];
-      for(let k = 0; k <= 10; k++){
-        const f = (i + 0.06 + (k/10)*0.88)/span;
-        const a = A0 + f*AMAX, r = R_OUT - (R_OUT-R_IN)*f - (w/2 + 2.4);
-        sp.push([(C+Math.cos(a)*r).toFixed(1), (C+Math.sin(a)*r).toFixed(1)].join(','));
-      }
-      const sw = 0.8 + Math.min(row.short/Math.max(row.kept+row.short,1), 1) * 2.2;
-      parts.push(`<polyline points="${sp.join(' ')}" fill="none" stroke="#57534c" stroke-width="${sw.toFixed(2)}"/>`);
+      const noise = Math.min(row.short/Math.max(row.kept+row.short,1), 1);
+      parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="#0c0c0f"`
+               + ` stroke-width="${(w*0.55).toFixed(2)}"`
+               + ` stroke-dasharray="${(1.2+noise*2).toFixed(1)} ${(3.5-noise*1.6).toFixed(1)}"`
+               + ` opacity="${(0.35+noise*0.5).toFixed(2)}"/>`);
     }
   }
 
@@ -2707,13 +2803,44 @@ async function renderLedger(){
   const total = days.reduce((a,x)=>a+x.secs,0);
   document.getElementById('ledGrooveKey').textContent =
     `${seen} of ${span} days cut · ${span-seen} with nothing watching · `
-    + `${fmtSecs(total)} heard · thickness is time · the breaks are the gaps`;
+    + `${fmtSecs(total)} heard · thickness is time · the scuff is what was refused`
+    + ` · the breaks are the gaps`;
+}
+
+async function renderLedger(){
+  let d;
+  try{
+    const r = await fetch('/api/ledger', { cache:'no-store' });
+    d = await r.json();
+  }catch(e){ if(window.REPORT) REPORT('ledger: ' + e); }
+  // A silent return left the four headings standing over nothing, which reads
+  // as "you have listened to nothing" rather than "this screen did not load".
+  // The ledger is the screen that promises to say what it could not see; it is
+  // the last place allowed to go quiet about its own failure.
+  if(!d || d.error){
+    document.getElementById('ledStats').innerHTML =
+      `<div><b>&mdash;</b><span>the ledger could not be read</span></div>`;
+    for(const id of ['ledClosest','ledSrc','ledRecent'])
+      document.getElementById(id).innerHTML = `<li class="none">unavailable</li>`;
+    cutGroove({});
+    return;
+  }
+
+  const stat = (n, label, lit) =>
+    `<div class="${lit?'lit':''}"><b>${n}</b><span>${label}</span></div>`;
+  document.getElementById('ledStats').innerHTML =
+      stat(d.kept.toLocaleString(),    'listens kept')
+    + stat(d.refused.toLocaleString(), 'seen, not counted')
+    + stat(d.albums.toLocaleString(),  'albums known')
+    + stat(d.records.toLocaleString(), 'records pressed', true);
+
+  cutGroove(d);
 
   // ---- closest to a pressing ----
   const c = d.closest;
   document.getElementById('ledClosest').innerHTML = c
     ? `${esc(c.artist)} &mdash; ${esc(c.album)} &nbsp;<em>${c.heard} of ${c.floor} tracks</em>`
-    : '<span style="color:var(--ink-3)">nothing in progress</span>';
+    : '<span class="none">nothing yet within reach of a pressing</span>';
 
   // ---- sources ----
   document.getElementById('ledSrc').innerHTML = (d.sources||[]).map(x => {
@@ -2721,7 +2848,7 @@ async function renderLedger(){
     const name = x.app.includes('!') ? x.app.split('!').pop().replace(/^Microsoft\./,'')
                : x.app.replace(/\.exe$/i,'');
     return `<li><b>${esc(name || 'unknown')}</b><span>${x.n.toLocaleString()}</span></li>`;
-  }).join('');
+  }).join('') || '<li class="none">nothing has come through yet</li>';
 
   // ---- refusals ----
   document.getElementById('ledRecent').innerHTML = (d.recent||[]).map(x => {
@@ -2733,7 +2860,7 @@ async function renderLedger(){
       : esc(x.why || 'not counted');
     return `<li><span class="n">${esc(x.artist)} &mdash; ${esc(x.title)}</span>`
          + `<span class="w">${why}</span></li>`;
-  }).join('');
+  }).join('') || '<li class="none">nothing refused &mdash; everything seen was counted</li>';
 }
 
 document.getElementById('navNow').onclick    = () => setScreen('now');
@@ -4036,9 +4163,21 @@ function mv(e){
 stage.addEventListener('wheel',e=>{e.preventDefault();
   zoom=Math.min(1.6,Math.max(.4,zoom*(e.deltaY>0?.93:1.075)));},{passive:false});
 
+// Assigning cv.width/height reallocates and clears the drawing buffer even
+// when the number is identical, so this must be a no-op when nothing changed.
+// The frame loop calls it unconditionally.
+//
+// At rest the buffer drops to 1x. The raymarch cannot be halted -- the warp
+// term is the only thing that reads as the record turning, and a still record
+// is a broken record -- but a quarter of the fragments still buys most of what
+// stopping would have. The guard above is what makes this switchable at all.
+function DPR(){ return document.body.classList.contains('resting')
+                     ? 1 : Math.min(devicePixelRatio||1,2); }
 function resize(){
-  const dpr=Math.min(devicePixelRatio||1,2);
-  cv.width=Math.round(innerWidth*dpr); cv.height=Math.round(innerHeight*dpr);
+  const dpr=DPR();
+  const w=Math.round(innerWidth*dpr), h=Math.round(innerHeight*dpr);
+  if(w===cv.width && h===cv.height) return false;
+  cv.width=w; cv.height=h; return true;
 }
 // --slv is viewport-relative, so the crate's spacings have to be recomputed when
 // the window changes or the sleeves keep the geometry of the old size.
@@ -4050,6 +4189,7 @@ addEventListener('resize', () => {
 resize();
 
 let armT=0;
+let armSig='', armAt=0;
 function frame(now){
   const dt=Math.min((now-last)/1000,.1); last=now;
   // A platter has mass. It spins up against inertia and coasts down against
@@ -4175,12 +4315,67 @@ function frame(now){
   armSvg.style.display = S.arm.checked ? 'block':'none';
   document.body.classList.toggle('noarm', !S.arm.checked);
   if(S.arm.checked){
-    const dpr=Math.min(devicePixelRatio||1,2);
-    drawArm3D(armR, cv.width/dpr, cv.height/dpr, lift);
+    // drawArm3D() ends in armSvg.innerHTML = ..., which is a full SVG parse.
+    // It was running 60 times a second against a needle that, on a paused
+    // deck, had not moved in twenty minutes. Redraw when the arm's inputs
+    // actually change; at rest, cap it besides.
+    const dpr=DPR(), W=cv.width/dpr, Hp=cv.height/dpr;
+    const rest = document.body.classList.contains('resting');
+    const sig = armR.toFixed(4)+'|'+lift.toFixed(3)+'|'+W+'|'+Hp;
+    if(sig !== armSig && (!rest || now-armAt > 100)){
+      armSig = sig; armAt = now;
+      drawArm3D(armR, W, Hp, lift);
+    }
   }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// ---------------- rest ----------------
+// THE TRAP, and the reason this is not a two-line idle timer: the page is fed
+// by an EventSource that pushes up to once a second. Treating an update as
+// activity means the timer is reset forever and the app never rests at all.
+// Only a HUMAN wakes it. What is playing is not what is being done.
+const REST_AFTER = 45000;
+let restTimer = null;
+
+function restState(){
+  // Never render a zero. Each of these is an absence, and an absence gets
+  // described rather than counted.
+  if(!window.__live)        return ['not watching', true];
+  const L = window.__live;
+  if(L.error)               return ['not watching', true];
+  if(!L.track)              return ['nothing playing', false];
+  if(!L.playing)            return ['paused', false];
+  return ['listening', false];
+}
+
+function goRest(){
+  if(document.body.classList.contains('resting')) return;
+  const [word, warn] = restState();
+  const line = el('restLine');
+  if(line){ line.textContent = word; line.classList.toggle('warn', warn); }
+  document.body.classList.add('resting');
+  resize();                      // drops the buffer to 1x; guarded, so it is real
+}
+
+function wake(){
+  if(document.body.classList.contains('resting')){
+    document.body.classList.remove('resting');
+    resize();
+  }
+  clearTimeout(restTimer);
+  restTimer = setTimeout(goRest, REST_AFTER);
+}
+
+// Input only. Not 'message', not a repaint, not a track change.
+for(const ev of ['pointerdown','pointermove','wheel','keydown','touchstart','focusin'])
+  addEventListener(ev, wake, {passive:true});
+// A window you are not looking at is resting by definition.
+addEventListener('blur', goRest);
+addEventListener('focus', wake);
+document.addEventListener('visibilitychange', () => document.hidden ? goRest() : wake());
+wake();
 
 // ---------------- live: what is actually playing ----------------
 // The shelf is a snapshot baked by scripts/build-data.js. This is the other
@@ -4378,6 +4573,7 @@ const NOW = (() => {
   }
 
   function apply(np){
+      window.__live = np;
       if(np.error){ paint(null, np.error); return; }
 
       if(!np.playing){
@@ -4511,8 +4707,13 @@ const NOW = (() => {
     api.es.onmessage = e => {
       try{ apply(JSON.parse(e.data)); }catch(err){ REPORT('stream parse: ' + err); }
     };
-    // EventSource reconnects by itself; nothing to do here but not die.
-    api.es.onerror = () => {};
+    // EventSource reconnects by itself; nothing to do here but not die. But
+    // the last state it delivered is now a claim about the past, and the rest
+    // line must not keep asserting it -- a dropped collector reads as NOT
+    // WATCHING, which is the honest word for it.
+    api.es.onerror = () => {
+      if(api.es.readyState === EventSource.CLOSED) window.__live = null;
+    };
   }catch(e){ REPORT('stream unavailable: ' + e); }
 
   // The poll stays as a floor in case the stream never establishes at all --

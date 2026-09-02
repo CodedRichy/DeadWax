@@ -91,6 +91,21 @@ impl Store {
             -- with no plays reads identically whether nothing was playing or the
             -- collector was dead. Starts, stops, pauses and the gaps between
             -- them are written down so blind windows are known, not inferred.
+            -- What is known about an album beyond what the log can prove.
+            -- Today that is its real track count, which SMTC never supplies
+            -- (AlbumTrackCount is always 0, verified) and which the log cannot
+            -- infer -- hearing nine tracks says nothing about whether there are
+            -- nine or nineteen. Keyed by the same fold the shelf groups by.
+            --
+            -- This is the slot the bundled index drops into. Whatever fills it,
+            -- it stays SEPARATE from `listens`: the log is evidence, and this is
+            -- reference data that can be replaced wholesale without touching it.
+            CREATE TABLE IF NOT EXISTS album_meta (
+                key TEXT PRIMARY KEY,
+                len INTEGER NOT NULL,
+                source TEXT NOT NULL DEFAULT ''
+            );
+
             CREATE TABLE IF NOT EXISTS events (
                 id      INTEGER PRIMARY KEY,
                 ts      TEXT NOT NULL,
@@ -194,6 +209,23 @@ impl Store {
         rows.collect()
     }
 
+    /// Record an album's real length. Replaces whatever was there.
+    pub fn set_len(&self, key: &str, len: u32, source: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT INTO album_meta (key, len, source) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET len = excluded.len, source = excluded.source",
+            params![key, len, source],
+        )?;
+        Ok(())
+    }
+
+    /// Every known album length, by fold key.
+    pub fn lens(&self) -> rusqlite::Result<std::collections::HashMap<String, u32>> {
+        let mut stmt = self.conn.prepare("SELECT key, len FROM album_meta")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, u32>(1)?)))?;
+        rows.collect()
+    }
+
     pub fn count(&self) -> rusqlite::Result<i64> {
         self.conn.query_row("SELECT COUNT(*) FROM listens", [], |r| r.get(0))
     }
@@ -220,6 +252,17 @@ mod tests {
             counted,
             end_reason: "track changed".into(),
         }
+    }
+
+    #[test]
+    fn album_lengths_round_trip_and_replace() {
+        let s = Store::open_in_memory().unwrap();
+        s.set_len("partynextdoor--partynextdoor-two", 12, "web-build").unwrap();
+        assert_eq!(s.lens().unwrap().get("partynextdoor--partynextdoor-two"), Some(&12));
+        // A better source must be able to overwrite a worse one.
+        s.set_len("partynextdoor--partynextdoor-two", 14, "index").unwrap();
+        assert_eq!(s.lens().unwrap().get("partynextdoor--partynextdoor-two"), Some(&14));
+        assert_eq!(s.lens().unwrap().len(), 1);
     }
 
     #[test]

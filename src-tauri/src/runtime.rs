@@ -150,6 +150,59 @@ pub fn ingest(store: &Store, root: &Path) -> Result<usize, Box<dyn std::error::E
     Ok(n)
 }
 
+/// Seed covers and album lengths from the local web-build data file.
+///
+/// `deadwax-data.js` was generated once by `scripts/build-data.js` from a
+/// Last.fm export. It is already on disk, already gitignored, and carries two
+/// things the app cannot get for itself: the real album artwork, and the real
+/// track count -- SMTC supplies neither.
+///
+/// Reading a file that is already here is NOT the network dependency the
+/// project rules out. Nothing is fetched, and the app works identically if the
+/// file is absent. It is a one-time transfer of what was already collected.
+///
+/// It covers only the albums in that export. Anything played since is still
+/// blank until the bundled index ships, which fills the same `album_meta` slot.
+pub fn seed_from_web_build(store: &Store, root: &Path) -> (usize, usize) {
+    let path = root.join("deadwax-data.js");
+    let Ok(text) = std::fs::read_to_string(&path) else { return (0, 0) };
+    let (Some(a), Some(b)) = (text.find('{'), text.rfind('}')) else { return (0, 0) };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text[a..=b]) else { return (0, 0) };
+    let Some(shelf) = v.get("shelf").and_then(|s| s.as_array()) else { return (0, 0) };
+
+    let (mut covers, mut lens) = (0, 0);
+    for r in shelf {
+        let artist = r.get("artist").and_then(|x| x.as_str()).unwrap_or("");
+        let album = r.get("album").and_then(|x| x.as_str()).unwrap_or("");
+        if artist.is_empty() || album.is_empty() {
+            continue;
+        }
+        let key = crate::art::key(artist, album);
+        if key.is_empty() {
+            continue;
+        }
+
+        if let Some(n) = r.get("len").and_then(|x| x.as_u64()) {
+            if n > 0 && store.set_len(&key, n as u32, "web-build").is_ok() {
+                lens += 1;
+            }
+        }
+
+        if crate::art::find(root, &key).is_none() {
+            if let Some(bytes) = r
+                .get("art")
+                .and_then(|x| x.as_str())
+                .and_then(crate::art::from_data_uri)
+            {
+                if crate::art::save(root, &key, &bytes).is_ok() {
+                    covers += 1;
+                }
+            }
+        }
+    }
+    (covers, lens)
+}
+
 /// Open the log, derive the shelf, start serving. Returns the state and the
 /// bound port. Does NOT start capture -- see `spawn_capture`.
 pub fn start(verbose: bool) -> Result<(Arc<State>, u16), Box<dyn std::error::Error>> {
@@ -165,6 +218,11 @@ pub fn start(verbose: bool) -> Result<(Arc<State>, u16), Box<dyn std::error::Err
         println!("ingested {n} new listens from the collector");
     }
 
+    let (covers, lens) = seed_from_web_build(&store, &root);
+    if verbose && (covers > 0 || lens > 0) {
+        println!("seeded {covers} covers and {lens} album lengths from the web build");
+    }
+
     let counted = store.counted_listens()?;
     let records = shelf(&counted);
     let in_progress = crate::press::all_records(&counted);
@@ -178,6 +236,7 @@ pub fn start(verbose: bool) -> Result<(Arc<State>, u16), Box<dyn std::error::Err
     }
 
     let state = Arc::new(State {
+        lens: Mutex::new(store.lens().unwrap_or_default()),
         root,
         shelf: Mutex::new(records),
         pending: Mutex::new(in_progress),

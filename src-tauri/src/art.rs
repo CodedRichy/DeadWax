@@ -86,6 +86,46 @@ pub fn save(root: &Path, key: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
     Ok(p)
 }
 
+/// Decode a standard base64 payload. Small and local so the crate takes no
+/// dependency for one use.
+pub fn b64(s: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u8> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        })
+    };
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    let mut acc: u32 = 0;
+    let mut bits = 0u32;
+    for c in s.bytes() {
+        if c == b'=' || c.is_ascii_whitespace() {
+            continue;
+        }
+        let v = val(c)? as u32;
+        acc = (acc << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    Some(out)
+}
+
+/// Pull the bytes out of a `data:image/...;base64,...` URI.
+pub fn from_data_uri(uri: &str) -> Option<Vec<u8>> {
+    let (head, payload) = uri.split_once(',')?;
+    if !head.starts_with("data:image/") || !head.contains(";base64") {
+        return None;
+    }
+    b64(payload)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +151,24 @@ mod tests {
     #[test]
     fn different_albums_do_not_share_a_key() {
         assert_ne!(key("Tame Impala", "Currents"), key("Tame Impala", "Lonerism"));
+    }
+
+    #[test]
+    fn base64_decodes_and_rejects_junk() {
+        assert_eq!(b64("TWFu").unwrap(), b"Man");
+        assert_eq!(b64("TWE=").unwrap(), b"Ma");
+        assert_eq!(b64("TQ==").unwrap(), b"M");
+        assert!(b64("not base64!").is_none());
+    }
+
+    #[test]
+    fn data_uri_yields_image_bytes() {
+        // A one-pixel GIF header is enough to prove the payload survives.
+        let uri = "data:image/png;base64,iVBORw0KGgo=";
+        let bytes = from_data_uri(uri).unwrap();
+        assert_eq!(&bytes[..4], &[0x89, b'P', b'N', b'G']);
+        assert!(from_data_uri("data:text/plain;base64,aGk=").is_none());
+        assert!(from_data_uri("https://example.com/a.png").is_none());
     }
 
     #[test]

@@ -46,6 +46,9 @@ pub struct Live {
 
 pub struct State {
     pub root: PathBuf,
+    /// Real album track counts by fold key, when anything knows them. Empty is
+    /// the honest default -- see the `len` note in `shelf_json`.
+    pub lens: Mutex<std::collections::HashMap<String, u32>>,
     pub shelf: Mutex<Vec<Record>>,
     /// Every album the log knows, floor or no floor. The shelf is the earned
     /// subset; this is what lets the deck show a record being cut.
@@ -86,7 +89,11 @@ fn placeholder_loudness(title: &str) -> f64 {
     0.25 + ((h >> 11) % 1000) as f64 / 1000.0 * 0.55
 }
 
-fn shelf_json(root: &Path, records: &[Record]) -> String {
+fn shelf_json(
+    root: &Path,
+    records: &[Record],
+    lens: &std::collections::HashMap<String, u32>,
+) -> String {
     let items: Vec<String> = records
         .iter()
         .map(|r| {
@@ -114,9 +121,10 @@ fn shelf_json(root: &Path, records: &[Record]) -> String {
                 // tracks it actually has. This used to send `heard`, which made
                 // every record on the shelf report itself complete -- "9/9
                 // tracks heard" on a pressing missing half its side. SMTC never
-                // supplies AlbumTrackCount (always 0, verified), so until the
-                // bundled index ships the honest answer is to not claim one.
-                0,
+                // supplies AlbumTrackCount (always 0, verified), so a length
+                // can only come from reference data. 0 still means UNKNOWN and
+                // the page counts what it has; it is no longer the only answer.
+                lens.get(&crate::art::key(&r.artist, &r.album)).copied().unwrap_or(0),
                 // A URL, not an inlined data: URI. The web build baked covers
                 // into the page because it shipped as a single file; the app has
                 // a server, so sleeves stay on disk and the page fetches them --
@@ -191,7 +199,7 @@ fn index_page(state: &State) -> Vec<u8> {
     let shelf = state.shelf.lock().unwrap();
     let injection = format!(
         "<script>window.DEADWAX = {};</script>\n",
-        shelf_json(&state.root, &shelf)
+        shelf_json(&state.root, &shelf, &state.lens.lock().unwrap())
     );
     drop(shelf);
 
@@ -401,7 +409,8 @@ fn handle(mut stream: TcpStream, state: &State) {
         // has been open rather than only the ones that existed at load.
         "/api/shelf" => {
             let sh = state.shelf.lock().unwrap();
-            let body = shelf_json(&state.root, &sh).into_bytes();
+            let body =
+                shelf_json(&state.root, &sh, &state.lens.lock().unwrap()).into_bytes();
             drop(sh);
             respond(&mut stream, "200 OK", "application/json; charset=utf-8", &body);
         }
@@ -468,7 +477,7 @@ mod tests {
 
     #[test]
     fn shelf_json_is_valid_and_escapes_quotes() {
-        let j = shelf_json(Path::new("."), &[rec()]);
+        let j = shelf_json(Path::new("."), &[rec()], &Default::default());
         assert!(j.contains(r#"\"quoted\""#), "quotes must be escaped, not emitted raw");
         assert!(j.contains(r#""plays":19"#));
         // Parses as JSON.

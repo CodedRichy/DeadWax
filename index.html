@@ -3876,7 +3876,10 @@ const NOW = (() => {
   // roomDrove: did WE start the platter, or did the user? Only what the room
   // started may the room stop -- otherwise a record put on by hand with no audio
   // behind it gets halted every 3 seconds by a silent SMTC session.
-  let lastKey = null, failed = 0, roomDrove = false, shelfStamp = null;
+  // roomDropped: the needle is down because the ROOM put it there. Same rule as
+  // roomDrove -- only what we set do we clear, so a record you cued by hand is
+  // never lifted out from under you.
+  let lastKey = null, failed = 0, roomDrove = false, roomDropped = false, shelfStamp = null;
 
   // Pull the shelf again when the server says it changed.
   //
@@ -4035,6 +4038,15 @@ const NOW = (() => {
         // stopped rather than snapping anywhere.
         if(clock) clock.playing = false;
         if(roomDrove) setPlaying(false);
+        // Lift the stylus, which is what stopping a deck actually is. A needle
+        // parked in a stopped groove is the one thing you never do to a record,
+        // and the transport already says so: cue up to stop, set down to start.
+        if(roomDropped && !lifting && !armDrag){
+          roomDropped = false;
+          lifting = true;
+          el('bCue').textContent = 'Drop';
+          needleLift();
+        }
         el('stylusInfo').dataset.np = np.track ? `${np.artist} — ${np.track}` : '';
         return;
       }
@@ -4111,6 +4123,20 @@ const NOW = (() => {
         if(anchor.pos < running && running - anchor.pos < 2) anchor.pos = running;
       }
       clock = anchor;
+
+      // Needle down. Something is playing and the record on the deck is the one
+      // carrying it, so the stylus belongs in the groove. cueTo() did this for
+      // records that were already pressed, but nothing did it for a lacquer --
+      // and once you cued the arm up by hand, nothing ever put it back down. So
+      // a song would start, the platter would turn, and the arm would sit in
+      // the air over it.
+      if(anchor.matched && np.playing && lifting && !armDrag){
+        lifting = false;
+        lift = 0;
+        el('bCue').textContent = 'Cue';
+        needleDrop();
+        roomDropped = true;
+      }
   }
 
   async function tick(){

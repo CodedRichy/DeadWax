@@ -4232,12 +4232,13 @@ stage.addEventListener('wheel',e=>{e.preventDefault();
 // when the number is identical, so this must be a no-op when nothing changed.
 // The frame loop calls it unconditionally.
 //
-// At rest the buffer drops to 1x. The raymarch cannot be halted -- the warp
-// term is the only thing that reads as the record turning, and a still record
-// is a broken record -- but a quarter of the fragments still buys most of what
-// stopping would have. The guard above is what makes this switchable at all.
-function DPR(){ return document.body.classList.contains('resting')
-                     ? 1 : Math.min(devicePixelRatio||1,2); }
+// This used to drop to 1x while resting, to buy back a quarter of the fragment
+// count. REVERTED, and it must stay reverted: resampling the disc at half the
+// resolution moves the groove moire and shifts the specular band, so the record
+// visibly CHANGED as the app went to rest. Rest's whole contract is that the
+// chrome recedes and the record does not move. A cheaper frame is not worth
+// paying for with the one object the app exists to draw.
+function DPR(){ return Math.min(devicePixelRatio||1,2); }
 function resize(){
   const dpr=DPR();
   const w=Math.round(innerWidth*dpr), h=Math.round(innerHeight*dpr);
@@ -4421,14 +4422,11 @@ function goRest(){
   const line = el('restLine');
   if(line){ line.textContent = word; line.classList.toggle('warn', warn); }
   document.body.classList.add('resting');
-  resize();                      // drops the buffer to 1x; guarded, so it is real
 }
 
 function wake(){
-  if(document.body.classList.contains('resting')){
+  if(document.body.classList.contains('resting'))
     document.body.classList.remove('resting');
-    resize();
-  }
   clearTimeout(restTimer);
   restTimer = setTimeout(goRest, REST_AFTER);
 }

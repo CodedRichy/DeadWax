@@ -642,7 +642,7 @@
   /* An empty deck has nothing to cue, pause or flip. Offering "Pause" when
      nothing has ever played is the transport lying about its own state. */
   body.noshelf #bCue,body.noshelf #bPlay,body.noshelf #bFlip,
-  body.noshelf #bCtl,body.noshelf #bShelf{display:none}
+  body.noshelf #bCtl{display:none}
 
   /* Empty shelf: no invented record, no tracklist, no title. */
   body.noshelf #liner,body.noshelf #np,body.noshelf #cat{opacity:0 !important;visibility:hidden}
@@ -774,7 +774,14 @@
   }
   body.dropping #drop{display:grid}
   /* ---- transport, set flush under the title block ---- */
-  /* One transport row, centred on the frame. Cue/Pause/Flip/Shelf used to sit
+  /* THE BOTTOM ROW IS ACTIONS. THE TOP ROW IS PLACES.
+     With the nav moved up top in the same mono at the same tracking, the two
+     read as two bars of the same kind -- and they overlapped: SHELF here went
+     to the same screen as CRATE up there. Shelf is gone. What is left is only
+     what you do TO the record on the platter, plus the two utilities. Nothing
+     in this row changes which screen you are on.
+
+     One transport row, centred on the frame. Cue/Pause/Flip/Shelf used to sit
      bottom-left while #hint repeated "flip" and "shelf" bottom-right and the
      controls tab ran down the right edge -- three separate places telling you
      about the same four actions, none of them on the same baseline. */
@@ -1137,7 +1144,6 @@
   <button id="bCue">Cue</button>
   <button id="bPlay">Play</button>
   <button id="bFlip">Flip</button>
-  <button id="bShelf">Shelf</button>
   <button id="bCtl">Controls</button>
   <!-- Deliberately outside the body.noshelf hide-list: on an empty deck this is
        the only thing left in the bar, which is exactly who About is for. -->
@@ -2963,7 +2969,9 @@ function setPanel(which){
   document.body.classList.toggle('uiopen', wantUI);
   document.body.classList.toggle('shelfopen', wantShelf);
   document.getElementById('bCtl').textContent = wantUI ? 'Close' : 'Controls';
-  document.getElementById('bShelf').textContent = wantShelf ? 'Close' : 'Shelf';
+  // The Shelf button used to relabel itself to "Close" here. That button is
+  // gone -- the crate is a screen you navigate to, not a panel you toggle --
+  // and the nav's own current-screen mark says where you are instead.
 }
 const openShelf  = () => setScreen('crate');
 const closeShelf = () => setScreen('now');
@@ -3096,8 +3104,9 @@ document.getElementById('crDel').onclick = async ()=>{
   saveShelf(); renderShelf();
   if(r === REC) selectRecord(SHELF[crateIdx] || BLANK, 0);
 };
-document.getElementById('bShelf').onclick = ()=>
-  document.body.classList.contains('shelfopen') ? closeShelf() : openShelf();
+// Shelf came off the transport row -- the top nav's CRATE is the same
+// destination, and one product should not offer the same door twice under two
+// names. 's' and the crate's own Close still call these, and so does the nav.
 document.getElementById('shelfClose').onclick = closeShelf;
 
 // controls tray: click to toggle, never hover

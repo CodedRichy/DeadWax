@@ -84,10 +84,11 @@
        centred and the type read as floating in from nowhere. The record is the
        only thing that gets to be centred; everything else goes to a corner. */
     --edge: 44px;
-    /* The line every bottom-corner block sits on. The transport buttons set it:
-       they sit at --edge with 16px of bottom padding, so their text lands here.
-       The title block and the paste bar are anchored to the same value, which is
-       why all three read as one row rather than three floating heights. */
+    /* The line every bottom-corner block sits on. The transport used to set it
+       -- it sat at --edge with 16px of bottom padding and its text landed here
+       -- but the transport has moved to the top bar. The value stays because
+       the title block and the paste bar are still anchored to it, and they are
+       what read as one row now. */
     --baseline: calc(var(--edge) + 16px);
     /* Crate sleeve edge. Everything else in the crate is derived from it, in CSS
        and in JS, so this is the single handle on how big the crate reads. */
@@ -788,15 +789,15 @@
   /* nowrap: adding About pushed the row past its box on a narrow window and the
      last button dropped to a second line, which broke the shared baseline the
      three corners are aligned to. */
-  #cue{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--edge);
-    z-index:7;display:flex;gap:0;align-items:stretch;flex-wrap:nowrap;white-space:nowrap}
+  #cue{display:flex;align-items:center;gap:24px}
   #cue button{
+    -webkit-appearance:none;appearance:none;
     width:auto;padding:0;margin:0;border:0;background:none;
-    font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
-    color:var(--ink-3);cursor:pointer;padding:16px 22px 16px 0;
-    transition:color .2s;
+    font-family:var(--mono);font-size:10px;letter-spacing:.26em;text-transform:uppercase;
+    color:#54504a;cursor:pointer;
+    transition:color .25s var(--ease);
   }
-  #cue button:hover,#cue button:focus-visible{color:var(--accent);border:0}
+  #cue button:hover{color:var(--ink-2)}
   #cue button:focus-visible{outline:1px solid var(--accent);outline-offset:2px}
   /* the needle's own readout, set as the last line of the title block */
   #stylusInfo{
@@ -865,10 +866,28 @@
                             catches the room
        a dark drop       -- so it sits ABOVE the record rather than in it
   */
-  #nav{
+  /* ---- the top bar -----------------------------------------------------
+     Everything that is not the record lives on one line now: the wordmark at
+     the left edge, the catalogue stamp at the right, and in the middle the
+     only two groups of controls this app has. A divider separates them,
+     because they are different KINDS of thing -- left of it changes where you
+     are, right of it changes the record. Without that mark they read as one
+     undifferentiated strip of seven words.
+
+     No box, no fill, no blur. Every control in this product is a word set on
+     black; the record is the only object. */
+  #topbar{
     position:fixed;left:50%;transform:translateX(-50%);top:var(--edge);z-index:12;
-    display:flex;align-items:center;gap:30px;
+    display:flex;align-items:center;height:var(--toprow);
+    /* The one gap that means something: the two groups are further apart than
+       anything inside either of them. Proximity does the grouping, which is
+       why the hairlines BETWEEN nav items had to go -- with a rule after every
+       word, the rule separating places from actions said nothing, and the bar
+       read as seven equally unrelated words. */
+    gap:44px;
   }
+  #topbar .sep{width:1px;height:11px;background:var(--rule);flex:0 0 auto}
+  #nav{display:flex;align-items:center;gap:26px}
   #nav button{
     -webkit-appearance:none;appearance:none;
     border:0;background:none;padding:0;cursor:pointer;
@@ -880,10 +899,15 @@
   #nav button:focus-visible{outline:1px solid var(--ink-2);outline-offset:3px}
   /* Full ink, not the accent: --accent is sampled per record from its sleeve
      art and can land anywhere on the wheel, and this is the one control that
-     must stay readable on every cover. The accent also stays reserved for
-     earned numbers. */
+     must stay readable on every cover. The accent stays for earned numbers. */
   #nav button[aria-current="true"]{color:var(--ink)}
-  #nav .mark{width:1px;height:9px;background:var(--rule);flex:0 0 auto}
+  /* Kept in the markup for the aria structure; the gap groups them now. */
+  #nav .mark{display:none}
+  /* Narrow windows: close the gaps before anything collides with the wordmark
+     or the catalogue stamp. */
+  @media (max-width:1180px){
+    #topbar{gap:30px} #nav{gap:18px} #cue{gap:18px}
+  }
 
   /* ---- the ledger -----------------------------------------------------
      What a listen log cannot say on its own: what it MISSED. A stretch with no
@@ -1140,15 +1164,6 @@
   <tbody id="tb"></tbody></table>
 </div>
 
-<div id="cue">
-  <button id="bCue">Cue</button>
-  <button id="bPlay">Play</button>
-  <button id="bFlip">Flip</button>
-  <button id="bCtl">Controls</button>
-  <!-- Deliberately outside the body.noshelf hide-list: on an empty deck this is
-       the only thing left in the bar, which is exactly who About is for. -->
-  <button id="bAbout">About</button>
-</div>
 
 <!-- #hint removed: it repeated Flip and Shelf, which are buttons two inches
      away, and it was the only element on its own baseline. -->
@@ -1161,6 +1176,11 @@
      200x200. So it sits in the corner as its own panel -- it is never allowed
      to slide under the record, and nothing may be drawn over it. -->
 
+<!-- Places and actions on one line. They were two rows in the same mono at the
+     same tracking, which read as two bars of the same kind; the divider is what
+     says they are not. Left of it, where you are. Right of it, what you can do
+     to the record. -->
+<div id="topbar">
 <nav id="nav" aria-label="Screens">
   <button id="navNow"    aria-current="true">Now</button>
   <div class="mark"></div>
@@ -1168,6 +1188,17 @@
   <div class="mark"></div>
   <button id="navLedger">Ledger</button>
 </nav>
+  <div class="sep" aria-hidden="true"></div>
+  <div id="cue">
+    <button id="bCue">Cue</button>
+    <button id="bPlay">Play</button>
+    <button id="bFlip">Flip</button>
+    <button id="bCtl">Controls</button>
+    <!-- Deliberately outside the body.noshelf hide-list: on an empty deck this is
+         the only thing left in the bar, which is exactly who About is for. -->
+    <button id="bAbout">About</button>
+  </div>
+</div>
 
 <section id="ledger" aria-label="The ledger">
  <div id="ledRead">

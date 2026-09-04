@@ -148,7 +148,15 @@
   body.arming #arm .hit{cursor:grabbing}
 
   /* ---- masthead + catalogue line ---- */
-  #head{position:fixed;top:var(--edge);left:var(--edge);pointer-events:none;z-index:5}
+  /* The height of the nav pill, and therefore of the whole top row. The
+     wordmark, the nav and the catalogue number are pinned to the same edge but
+     are different heights, so pinning alone left them top-aligned and sitting
+     at three different optical centres. Everything in the row now occupies a
+     box of this height and centres inside it, which is what puts them on one
+     line. Change the pill's padding and this is the only number to follow. */
+  :root{ --toprow:46px }
+  #head{position:fixed;top:var(--edge);left:var(--edge);pointer-events:none;z-index:5;
+    height:var(--toprow);display:flex;align-items:center}
   #head h1{
     font-family:var(--display);font-weight:400;font-size:23px;margin:0;
     letter-spacing:.06em;color:var(--ink);
@@ -157,6 +165,9 @@
     /* Corner-set, like the catalogue number stamped in the corner of a sleeve
        back. It used to align to the tracklist column, which now lives at the
        window edge anyway -- so the two agree without the indirection. */
+    /* No flex box here: its three mono lines already stack to the row height
+       and centre on the same axis as the pill. Wrapping it in a flex column
+       collapsed each line to shrink-to-fit and pulled the block 70px right. */
     position:fixed;top:var(--edge);right:var(--edge);z-index:5;pointer-events:none;
     font-family:var(--mono);font-size:10px;color:var(--ink-3);
     letter-spacing:.22em;text-transform:uppercase;text-align:right;
@@ -545,7 +556,9 @@
   #modalAct button.danger:hover{color:#c2705e}
 
   #crateHint{
-    position:absolute;left:0;right:0;top:6vh;text-align:center;
+    /* Was 6vh, which is exactly where the floating nav now sits -- the hint
+       was reading through the glass. Pushed below the pill. */
+    position:absolute;left:0;right:0;top:calc(var(--edge) + 62px);text-align:center;
     font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;
     color:#4a463f;pointer-events:none;
     transition:opacity .5s var(--ease);
@@ -827,47 +840,71 @@
   }
 
 
-  /* ---- the rail -------------------------------------------------------
-     Three screens, and the nav is the edge of a crate seen side-on: the only
-     navigation metaphor this product can use that nothing else can. No pill,
-     no fill, no icon set -- the active screen is marked by the accent and by
-     coming forward, which is how a record you are pulling actually reads.
-     Vertical because a spine is vertical. */
+  /* ---- the nav ---------------------------------------------------------
+     Was a 52px rail down the left edge, set vertically like the spine of a
+     record in a crate. Good metaphor; wrong furniture. It took a permanent
+     column out of a layout whose whole point is one centred object, it forced
+     every left-anchored element to carry a --rail offset, and it re-centred
+     the transport on what was LEFT of the window rather than on the window.
+
+     So the nav floats instead. A glass pill at the top, over the record --
+     which is what makes the glass work at all: a blur needs something behind
+     it, and there is a lit disc back there. On a flat ground it would just be
+     a grey box.
+
+     Three layers do the whole effect, and all three are needed:
+       backdrop-filter  -- blur AND saturate, or the disc goes grey behind it
+       a hairline top    -- inset light along the upper edge, where a real pane
+                            catches the room
+       a dark drop       -- so it sits ABOVE the record rather than in it
+  */
   #nav{
-    position:fixed;left:0;top:0;bottom:0;width:52px;z-index:12;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:34px;
-    border-right:1px solid var(--rule);
-    background:linear-gradient(90deg,#0a0a0c,#08080a);
+    position:fixed;left:50%;transform:translateX(-50%);top:var(--edge);z-index:12;
+    display:flex;align-items:center;gap:2px;padding:4px;
+    border-radius:999px;
+    /* A blur alone is not a material. Over this app's near-black top strip
+       there is frequently NOTHING behind the pill to blur, and a pane that
+       depends on its backdrop collapses into a flat grey lozenge exactly when
+       the record is not underneath it. So the glass is built to read on its
+       own: a vertical fill that is brighter at the top where a real pane
+       catches the room, a bright upper hairline, a dark lower one for
+       thickness, and a drop that puts it above the scene. The blur is then a
+       bonus wherever there IS something behind it -- the crate's sleeves, the
+       ledger's groove, the disc. */
+    background:linear-gradient(180deg,
+      rgba(255,255,255,.115), rgba(255,255,255,.035) 55%, rgba(255,255,255,.055));
+    border:1px solid rgba(255,255,255,.13);
+    border-top-color:rgba(255,255,255,.22);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+    backdrop-filter:blur(24px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.26),
+      inset 0 -1px 0 rgba(0,0,0,.45),
+      0 1px 0 rgba(255,255,255,.05),
+      0 16px 40px rgba(0,0,0,.6);
   }
   #nav button{
     -webkit-appearance:none;appearance:none;
-    border:0;background:none;padding:14px 0;width:100%;cursor:pointer;
-    font-family:var(--mono);font-size:9px;letter-spacing:.28em;text-transform:uppercase;
-    color:#54504a;
-    writing-mode:vertical-rl;transform:rotate(180deg);
-    transition:color .25s var(--ease),transform .35s var(--ease);
+    border:0;background:none;cursor:pointer;
+    padding:9px 20px;border-radius:999px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;
+    text-transform:uppercase;color:#7c7770;
+    transition:color .25s var(--ease),background .25s var(--ease);
   }
   #nav button:hover{color:var(--ink-2)}
-  #nav button[aria-current="true"]{color:var(--accent)}
-  /* Forward, not filled. A record you pull stands proud of the ones beside it. */
-  #nav button[aria-current="true"]{transform:rotate(180deg) translateY(4px)}
-  #nav .mark{
-    width:16px;height:1px;background:var(--rule);flex:0 0 auto;
+  #nav button:focus-visible{outline:1px solid var(--ink-2);outline-offset:2px}
+  /* The active screen is a brighter pane inside the pane, not an accent fill.
+     --accent is sampled from sleeve art and can land anywhere on the wheel, so
+     spending it on the one control you must always be able to read is how the
+     nav becomes illegible on a bright cover. It also stays reserved for earned
+     numbers. */
+  #nav button[aria-current="true"]{
+    color:var(--ink);
+    background:linear-gradient(180deg,rgba(255,255,255,.19),rgba(255,255,255,.10));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.30), 0 2px 10px rgba(0,0,0,.45);
   }
-  /* Everything fixed to the left edge clears the rail.
-     body{padding-left} does NOT do this: every left-anchored element in this
-     page is position:fixed, which is laid out against the viewport and ignores
-     the body box entirely -- so the wordmark, the title block and the empty
-     state all sat underneath the rail. The anchor itself has to move. */
-  :root{ --rail:52px }
-  #head,#np,#empty{ left:calc(var(--rail) + var(--edge)) !important }
-  /* The transport is window-centred; centre it on what is left of the window
-     rather than on the window, or it drifts right by half the rail. */
-  #cue{ left:calc(50% + var(--rail)/2) }
-  /* The crate and the tray are full-window overlays; they start after the rail
-     so the nav is never covered by the thing it navigates to. */
-  #shelf,#ui{ left:var(--rail) }
+  /* The old rail's separators. A floating pill needs none. */
+  #nav .mark{display:none}
 
   /* ---- the ledger -----------------------------------------------------
      What a listen log cannot say on its own: what it MISSED. A stretch with no
@@ -878,8 +915,10 @@
      that had been stretched. The run is the subject, so it takes the right
      column and stays put while the reading matter scrolls past it. */
   #ledger{
-    position:fixed;inset:0 0 0 var(--rail);z-index:9;
+    position:fixed;inset:0;z-index:9;
     background:var(--bg);overflow-y:auto;
+    /* clear the floating nav, which now sits over this */
+    padding-top:calc(var(--edge) + 54px);
     display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.85fr);
     grid-template-areas:'read run';
     column-gap:clamp(28px,4vw,72px);align-items:start;

@@ -403,7 +403,12 @@ pub fn capture_loop(state: Arc<State>, verbose: bool) {
                         let mark = if l.counted { "kept " } else { "short" };
                         println!("  [{mark}] {} - {}  ({:.0}s)", l.artist, l.title, l.dwell_sec);
                     }
-                    if let Err(e) = store.append(l) {
+                    // append_new, not append: the w.alive switch above is
+                    // what SHOULD keep the two collectors apart, but it is a
+                    // heartbeat heuristic with a 90s staleness window, and when
+                    // it slipped it wrote 44 duplicate pairs that no key could
+                    // merge afterwards. The window check is the second line.
+                    if let Err(e) = store.append_new(l) {
                         eprintln!("could not write listen: {e}");
                     }
                 }

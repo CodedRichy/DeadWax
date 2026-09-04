@@ -83,7 +83,11 @@ impl Store {
             CREATE INDEX IF NOT EXISTS listens_time  ON listens(started_at);
             -- Supports append_new's existence check. The widget's log is
             -- re-read continuously, so that check runs once per line of it.
-            CREATE INDEX IF NOT EXISTS listens_ident ON listens(started_at, title, artist);
+            -- Keyed title-first because the check now compares started_at with
+            -- a function (a time window, not equality), so a started_at-leading
+            -- index cannot serve it.
+            DROP INDEX IF EXISTS listens_ident;
+            CREATE INDEX IF NOT EXISTS listens_dedupe ON listens(title, artist, started_at);
 
             -- The uptime ledger, carried over from the PowerShell collector.
             -- A listen log records what was heard; it cannot record what was
@@ -147,6 +151,18 @@ impl Store {
     /// instead, by only ever having one collector running (see `runtime`).
     ///
     /// Returns true if the row was new.
+    /// How far apart two reports of one track can land and still be the same
+    /// listen.
+    ///
+    /// The tray collector and the app both poll SMTC on their own clocks, so
+    /// while both are live they stamp a single listen twice, at whatever moment
+    /// each poll happened to land. Measured skew in the field was 0.39s to 1.5s
+    /// against a 2s poll. Thirty seconds sits an order of magnitude above that
+    /// and well below the shortest genuine replay: re-hearing a track within
+    /// half a minute of starting it means skipping through it, which the dwell
+    /// rule refuses to count anyway.
+    const DEDUPE_WINDOW_SECS: f64 = 30.0;
+
     pub fn append_new(&self, l: &Listen) -> rusqlite::Result<bool> {
         let n = self.conn.execute(
             r#"INSERT INTO listens
@@ -156,13 +172,14 @@ impl Store {
                SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14
                WHERE NOT EXISTS (
                    SELECT 1 FROM listens
-                   WHERE started_at = ?1 AND title = ?4 AND artist = ?5
+                   WHERE title = ?4 AND artist = ?5
+                     AND abs(julianday(started_at) - julianday(?1)) * 86400.0 < ?15
                )"#,
             params![
                 l.started_at, l.ended_at, l.source_app, l.title, l.artist,
                 l.album_title, l.album_artist, l.track_number, l.album_track_count,
                 l.playback_type, l.duration_sec, l.dwell_sec, l.counted as i32,
-                l.end_reason
+                l.end_reason, Self::DEDUPE_WINDOW_SECS
             ],
         )?;
         Ok(n > 0)
@@ -362,6 +379,32 @@ mod tests {
         let mut again = l.clone();
         again.started_at = "2026-09-01T11:00:00+05:30".into();
         assert!(s.append_new(&again).unwrap(), "a replay is a new listen");
+        assert_eq!(s.count().unwrap(), 2);
+    }
+
+    #[test]
+    fn append_new_merges_collector_skew() {
+        let s = Store::open_in_memory().unwrap();
+        // The tray and the app both poll SMTC. When both are live their polls
+        // land at different points in the same track, so the two rows never
+        // agree on started_at to the microsecond -- which is exactly what the
+        // exact-timestamp key used to compare. In the field this wrote 44 pairs
+        // under a second apart, one row per collector, same track, same length.
+        let mut a = listen("Justin Bieber", "Sorry", true);
+        a.started_at = "2026-09-01T20:27:23.541026500+05:30".into();
+        a.playback_type = "MediaPlaybackType(1)".into();
+        assert!(s.append_new(&a).unwrap(), "first collector must insert");
+
+        let mut b = a.clone();
+        b.started_at = "2026-09-01T20:27:23.9334885+05:30".into(); // 392ms later
+        b.playback_type = "Music".into();
+        assert!(!s.append_new(&b).unwrap(), "second collector must not insert");
+        assert_eq!(s.count().unwrap(), 1);
+
+        // Outside the window it is a replay again, not a skewed re-report.
+        let mut later = a.clone();
+        later.started_at = "2026-09-01T20:35:00+05:30".into();
+        assert!(s.append_new(&later).unwrap(), "a later play is a new listen");
         assert_eq!(s.count().unwrap(), 2);
     }
 

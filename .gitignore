@@ -24,6 +24,8 @@ dist/
 deadwax.db
 src-tauri/deadwax.db
 src-tauri/deadwax.db-wal
+# Backups of the listen log are the listen log.
+src-tauri/deadwax.db.bak-*
 src-tauri/deadwax.db-shm
 
 # Page exceptions, captured off the webview. Carries track names.
